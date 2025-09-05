@@ -1,4 +1,4 @@
-// Cloudflare Worker per evitare CORS
+// Cloudflare Worker di riferimento (già lo hai attivo; questo è solo per archivio)
 export default {
   async fetch(req) {
     const u = new URL(req.url);

@@ -1,14 +1,15 @@
-# QPWON · Scoring Sprint (Auto‑Analyzer + Proxy‑ready)
+# QPWON · Scoring Sprint (Auto‑Analyzer · CONFIG PULITA)
 
-**Obiettivo:** inserisci il link e l’analisi parte senza blocchi CORS.
-**Come:** usa un proxy tuo (Cloudflare Worker incluso).
+Questa build è **preconfigurata** per usare il tuo Worker:
+```
+https://qpwonscorepro.apesce-consulente.workers.dev/?url=
+```
+## Uso
+1) Apri `index.html`.
+2) Incolla l’URL del centro.
+3) Clicca **Analizza** → vedi punteggi, motivi, script.
 
-## Setup rapido
-1. Crea un Worker su Cloudflare e incolla `worker.js`. Pubblica.
-2. Copia l’endpoint (es. `https://TUO-WORKER.workers.dev/?url=`).
-3. Apri `index.html` → **Impostazioni** → incolla l’endpoint → (opzionale) attiva **Forza uso proxy**.
-
-## Alternative
-- Bookmarklet integrato (nessun server): trascina “Analizza questa pagina”, cliccalo sul sito, incolla il testo nel tool → **Analizza testo**.
-
-Made for Alfonso · QPWON Suite.
+## Note
+- Impostazioni → puoi cambiare endpoint proxy.
+- Export CSV/JSON dalla top bar.
+- Dati salvati in `localStorage` (nessun backend).
