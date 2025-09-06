@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>QPWON · Scoring Sprint (v1.3)</title>
-  <meta name="description" content="Analizza un sito di poliambulatorio e genera una scheda lead completa: score, top 5 punti deboli, contatti auto-compilati (enhanced), script e pitch mail. Nessuna dipendenza." />
+  <title>QPWON · Scoring Sprint (v1.5)</title>
+  <meta name="description" content="Analizza un sito di poliambulatorio e genera una scheda lead completa: score, top 5 debolezze, contatti auto-compilati (anche offuscati), multisede, script e pitch. Debug evidenze/footer. Nessuna dipendenza." />
   <style>
     :root{
       --bg:#0f1220; --bg2:#121735; --card:#1b2140; --surface:#161c39; --line:#283060;
@@ -63,13 +63,19 @@
     .top5{display:flex;flex-wrap:wrap;gap:8px}
     .toast{position:fixed;right:16px;top:66px;background:#1b2140;border:1px solid #2a3260;border-radius:10px;padding:10px 14px;box-shadow:var(--shadow);opacity:0;transform:translateY(-6px);transition:all .2s ease;pointer-events:none}
     .toast.show{opacity:1;transform:translateY(0)}
+
+    .debug-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .dbgbox{background:#0e1535;border:1px dashed #33407a;border-radius:12px;padding:10px}
+    .dbgbox h4{margin:0 0 6px 0;color:#cfe1ff}
+    .snip{font-size:12px;color:#cfe1ff;background:#0b1230;border:1px solid #2a3260;border-radius:8px;padding:8px;white-space:pre-wrap}
+    .tag{font-size:11px;border:1px solid #31407a;background:#141a3a;border-radius:999px;padding:2px 6px;color:#cfe1ff;margin-left:6px}
   </style>
 </head>
 <body>
 <header>
   <div class="topbar">
     <div class="brand">QPWON · <span class="muted">Scoring Sprint</span></div>
-    <span class="pill">v1.3 · no deps</span>
+    <span class="pill">v1.5 · no deps</span>
     <div class="spacer"></div>
     <button id="btnSettings" class="btn-ghost">Impostazioni</button>
     <button id="exportJSON" class="btn-ghost">Export JSON</button>
@@ -92,12 +98,30 @@
 
       <details style="margin-top:6px">
         <summary class="muted">Problemi di lettura? (Siti solo JS) • Incolla testo</summary>
-        <textarea id="pasted" placeholder="Incolla qui il testo della pagina (bookmarklet) e poi premi Analizza"></textarea>
+        <textarea id="pasted" placeholder="Incolla qui il testo della pagina (es. con bookmarklet) e poi premi Analizza"></textarea>
       </details>
 
       <details style="margin-top:8px">
         <summary class="muted">Provenance (debug)</summary>
         <div id="prov" class="kpi" style="margin-top:8px"></div>
+      </details>
+
+      <details style="margin-top:8px">
+        <summary class="muted">Debugger Evidenze & Footer</summary>
+        <div class="debug-grid" style="margin-top:8px">
+          <div class="dbgbox">
+            <h4>Contatti trovati <span class="tag" id="dbgContactsCount">0</span></h4>
+            <div id="dbgContacts"></div>
+          </div>
+          <div class="dbgbox">
+            <h4>Blocchi Footer/Contatti <span class="tag" id="dbgBlocksCount">0</span></h4>
+            <div id="dbgBlocks"></div>
+          </div>
+          <div class="dbgbox" style="grid-column:1/3">
+            <h4>Prenotazione: provider/script/JSON-LD <span class="tag" id="dbgBookingCount">0</span></h4>
+            <div id="dbgBooking"></div>
+          </div>
+        </div>
       </details>
     </div>
   </section>
@@ -149,11 +173,12 @@
   <section class="card">
     <h2>3) Contatti, Script & Coda</h2>
     <div class="content col">
+
       <div id="multiWrap" class="row" style="justify-content:space-between;gap:10px">
         <div class="row" style="gap:8px"><strong>Sede:</strong><span id="sedeLabel" class="muted">—</span></div>
         <div class="row" style="gap:6px">
           <button id="prevLoc" class="btn-ghost">◀</button>
-          <select id="locSelect" style="min-width:220px"></select>
+          <select id="locSelect" style="min-width:240px"></select>
           <button id="nextLoc" class="btn-ghost">▶</button>
         </div>
       </div>
@@ -171,8 +196,11 @@
         <div class="box">
           <label>Email</label><input id="email" type="email" placeholder="esempio@dominio.it" />
         </div>
-        <div class="box" style="grid-column:1/3">
+        <div class="box" style="grid-column:1/2">
           <label>Indirizzo</label><input id="address" type="text" placeholder="Via…, CAP…, Città…" />
+        </div>
+        <div class="box" style="grid-column:2/3">
+          <label>Sorgente</label><input id="sourceHint" type="text" placeholder="mailto / cloudflare / block / jsonld…" disabled />
         </div>
       </div>
 
@@ -226,9 +254,6 @@
     <h3 style="margin:0 0 8px 0">Impostazioni</h3>
     <div style="display:grid;gap:10px">
       <label style="display:flex;align-items:center;gap:8px">
-        <input type="checkbox" id="forceProxy" checked/> Forza uso proxy (consigliato)
-      </label>
-      <label style="display:flex;align-items:center;gap:8px">
         <input type="checkbox" id="resetAfterSave" checked/> Reset automatico dopo salvataggio
       </label>
       <div>
@@ -247,26 +272,41 @@
 <div id="toast" class="toast">Azione completata.</div>
 
 <script>
-// ================== Helpers & State ==================
+/* =====================================================
+   QPWON Scoring Sprint — index.html (v1.5) — No deps
+   - Inserisci URL → analisi automatica (con proxy Worker)
+   - Autocompilazione contatti (anche offuscati / Cloudflare)
+   - Rilevazione "prenotazione online" (provider/widget/JSON-LD)
+   - 14 aree di valutazione (incl. marketing)
+   - Multisede, Top 5 debolezze, Script & Pitch, Coda + Export
+   - Debug evidenze & footer
+===================================================== */
+
+// Shortcuts & storage
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const STORAGE = 'qpwon_scoring_v1_3';
+const STORAGE = 'qpwon_scoring_v1_5';
 const DEFAULTS = {
   proxyEndpoint: "https://qpwonscorepro.apesce-consulente.workers.dev/?url=",
-  forceProxy: true, resetAfterSave: true, leads: []
+  resetAfterSave: true, leads: []
 };
 const S = { load(){ try{ return JSON.parse(localStorage.getItem(STORAGE))||{...DEFAULTS}; }catch{ return {...DEFAULTS}; } },
             save(v){ localStorage.setItem(STORAGE, JSON.stringify(v)); } };
 let state = S.load();
+
+// UI helpers
 function toast(t){ const el=$("#toast"); el.textContent=t; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"), 2200); }
+function setStatus(t){ $('#status').textContent = t; }
+function setProgress(p){ $('#pbar').style.width = p+'%'; }
 function esc(s){ return (s||'').replace(/[&<>\"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 function uuid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
 function clamp(n,a,b){ return Math.min(b, Math.max(a,n)); }
 
+// Areas & Weights
 const AREAS = ['booking','telefonate','orari','whatsapp','crescita','doppioSistema','dimensione','serviziCall','decisionMaker','numeroDiretto','seoBase','advAttiva','social','reputazione'];
 const WEIGHTS = { booking:2, telefonate:2, crescita:2, doppioSistema:2, dimensione:2, orari:1, whatsapp:1, serviziCall:1, decisionMaker:1, numeroDiretto:1, seoBase:1, advAttiva:1, social:1, reputazione:1 };
 
-// ================== Fetch via Proxy ==================
+// Proxy fetch
 async function edgeFetch(url){
   const ep = (state.proxyEndpoint||DEFAULTS.proxyEndpoint).trim();
   const r = await fetch(ep + encodeURIComponent(url), { credentials:"omit" });
@@ -276,11 +316,29 @@ async function edgeFetch(url){
   return { html:data.html, status:data.status||200, contentType:data.contentType||"", url:data.url||url };
 }
 
-// ================== Text & Links ==================
+// Concurrency pool
+async function fetchPool(urls, limit, worker){
+  const results = []; let i=0, active=0;
+  return await new Promise(resolve=>{
+    const next=()=>{
+      if(i>=urls.length && active===0) return resolve(results);
+      while(active<limit && i<urls.length){
+        const u = urls[i++]; active++;
+        worker(u).then(v=>results.push({ok:true,url:u,val:v}))
+                 .catch(e=>results.push({ok:false,url:u,err:e}))
+                 .finally(()=>{ active--; next(); });
+      }
+    };
+    next();
+  });
+}
+
+// HTML → text + links
 function extractText(html){
   try{
     const doc = new DOMParser().parseFromString(html,'text/html');
     doc.querySelectorAll('script,style,noscript,svg').forEach(n=>n.remove());
+    doc.querySelectorAll('[id*="cookie" i],[class*="cookie" i],[id*="gdpr" i],[class*="gdpr" i],[id*="consent" i],[class*="consent" i],[class*="banner" i],[id*="banner" i],[id*="policy" i],[class*="policy" i]').forEach(n=>n.remove());
     return (doc.body?.innerText||'').replace(/\s+/g,' ').trim();
   }catch(e){
     return html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
@@ -301,10 +359,10 @@ function pickLinks(base, html){
       if(u && !out.includes(u)) out.push(u);
     }
   }
-  return out.slice(0,5);
+  return out.slice(0,7);
 }
 
-// ================== JSON-LD & Contacts (enhanced) ==================
+// Regex & helpers (contacts)
 const PHONE_RE   = /((\+?39\s?)?0?\d[\d\s\-.]{6,})/g;
 const EMAIL_RE   = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const CAP_RE     = /\b\d{5}\b/;
@@ -316,6 +374,26 @@ const CONTACT_HINTS = /\b(Contatti|Segreteria|Prenotazioni|CUP|Accettazione|Rece
 
 const EMAIL_PRIORITY = ['prenotazioni','segreteria','cup','accettazione','booking','reception','frontoffice','amministrazione','direzione','contatti','info'];
 
+function decodeCfEmail(hex) {
+  try {
+    hex = String(hex).trim();
+    const key = parseInt(hex.slice(0, 2), 16);
+    let out = "";
+    for (let i = 2; i < hex.length; i += 2) {
+      const code = parseInt(hex.slice(i, i + 2), 16) ^ key;
+      out += String.fromCharCode(code);
+    }
+    return out;
+  } catch { return ""; }
+}
+function deobfuscateEmailText(s) {
+  let t = String(s || "");
+  t = t.replace(/\s*\[?\s*(?:chiocciola|at)\s*\]?\s*/gi, "@");
+  t = t.replace(/\s*\[?\s*(?:punto|dot)\s*\]?\s*/gi, ".");
+  t = t.replace(/\s*\(at\)\s*/gi, "@").replace(/\s*\(dot\)\s*/gi, ".");
+  t = t.replace(/\s+at\s+/gi, "@").replace(/\s+dot\s+/gi, ".");
+  return t;
+}
 function getSiteDomain(fromUrl){ try{ return new URL(fromUrl||'').hostname.replace(/^www\./,''); }catch{ return ''; } }
 function emailScore(email, siteDomain){
   const [local, domain] = String(email).toLowerCase().split('@'); let s = 0;
@@ -324,9 +402,20 @@ function emailScore(email, siteDomain){
   if (/gmail\.com|yahoo\.|hotmail\.|libero\.it|outlook\.com/.test(domain)) s -= 2;
   return s;
 }
-function normalizePhone(ph){ return String(ph||'').replace(/[^\d+]/g,'').replace(/^(\+)?39?0?/, (m,plus)=> plus?'+39':''); }
+function normalizePhone(ph){
+  let p = String(ph||'').replace(/[^\d]/g,'');
+  if (!p) return '';
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.startsWith('39')) return '+39'+p.slice(2);
+  if (p[0]==='0'){ p = p.replace(/^0+/, ''); return '+39'+p; }
+  if (p[0]==='3' && p.length>=9) return '+39'+p;
+  return '+39'+p;
+}
 function around(node, maxChars=280){ const txt=(node?.textContent||'').replace(/\s+/g,' ').trim(); return txt.slice(0,maxChars); }
+function first(arr){ return Array.isArray(arr)&&arr.length?arr[0]:undefined; }
+function join(parts){ return parts.filter(Boolean).join(', '); }
 
+// JSON-LD parsing
 function extractJsonLd(html){
   const out=[]; const re=/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let m; while((m=re.exec(html))){ try{
@@ -336,9 +425,6 @@ function extractJsonLd(html){
   }catch{} }
   return out.filter(n => /MedicalClinic|MedicalOrganization|LocalBusiness|Organization|Place/i.test(n['@type']||''));
 }
-function first(arr){ return Array.isArray(arr)&&arr.length?arr[0]:undefined; }
-function join(parts){ return parts.filter(Boolean).join(', '); }
-
 function contactFromNode(n){
   const addr = n.address || {};
   const cps  = Array.isArray(n.contactPoint) ? n.contactPoint : (n.contactPoint?[n.contactPoint]:[]);
@@ -346,11 +432,8 @@ function contactFromNode(n){
   const email = n.email     || first(cps.map(c=>c.email));
   return {
     name: n.name || n.legalName,
-    address: join([addr.streetAddress, addr.postOfficeBoxNumber]),
+    address: join([addr.streetAddress, addr.postOfficeBoxNumber, addr.postalCode, addr.addressLocality]),
     city: addr.addressLocality,
-    postalCode: addr.postalCode,
-    region: addr.addressRegion,
-    country: addr.addressCountry || "IT",
     phone, email,
     confidence: {
       name: n.name?'high':'mid',
@@ -359,10 +442,12 @@ function contactFromNode(n){
       phone: phone?'high':'mid',
       email: email?'high':'mid'
     },
-    _source: 'jsonld'
+    _source: 'jsonld',
+    _debug: [{type:'jsonld', field:'all', note:'JSON-LD Organization/Place', snippet: (n.name||'') + ' ' + (addr.streetAddress||'') }]
   };
 }
 
+// DOM-based extraction (footer/contatti + Cloudflare + data-attr + fallback)
 function extractContactsFromDOM(html, baseUrl){
   const doc = new DOMParser().parseFromString(html,'text/html');
   const siteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content') || '';
@@ -373,7 +458,6 @@ function extractContactsFromDOM(html, baseUrl){
 
   const telNodes = Array.from(doc.querySelectorAll('a[href^="tel:"]'));
   const mailNodes = Array.from(doc.querySelectorAll('a[href^="mailto:"]'));
-  const mapNodes = Array.from(doc.querySelectorAll('a[href*="goo.gl/maps"], a[href*="google.com/maps"]'));
 
   const contactBlocks = [
     ...Array.from(doc.querySelectorAll('footer')),
@@ -385,69 +469,109 @@ function extractContactsFromDOM(html, baseUrl){
   const micPostal = doc.querySelector('[itemprop="postalCode"]')?.textContent?.trim();
 
   const candidates = [];
-  if (nameCandidate) candidates.push({ field:'name', value:nameCandidate, conf:'mid', note:'dom:name', weight:2 });
+  const debug = [];
+
+  if (nameCandidate) {
+    candidates.push({ field:'name', value:nameCandidate, conf:'mid', note:'dom:name', weight:2 });
+    debug.push({ type:'name', field:'name', note:'og:site_name/H1/title/logo', snippet: nameCandidate });
+  }
 
   const siteDomain = getSiteDomain(baseUrl);
   for (const a of telNodes){
     const raw = a.getAttribute('href').replace(/^tel:/,'');
     const ph = normalizePhone(raw);
-    if (ph) candidates.push({ field:'phone', value:ph, conf:'high', note:'tel: anchor', weight:4 });
+    if (ph) { candidates.push({ field:'phone', value:ph, conf:'high', note:'tel: anchor', weight:4 }); debug.push({type:'phone', field:'phone', note:'tel: anchor', snippet: (a.textContent||'').trim()||ph}); }
   }
-  contactBlocks.forEach(b=>{
-    const txt = around(b, 600);
-    const phones = (txt.match(PHONE_RE)||[]).map(normalizePhone);
-    phones.forEach(ph => candidates.push({ field:'phone', value:ph, conf:'mid', note:'contact-block', weight:3 }));
+
+  // Cloudflare email-protection
+  doc.querySelectorAll('a[href^="/cdn-cgi/l/email-protection#"], span.__cf_email__').forEach(el => {
+    const hex = el.getAttribute('data-cfemail') || (el.getAttribute('href')||'').split('#')[1];
+    if (hex) {
+      const em = decodeCfEmail(hex);
+      if (em && EMAIL_RE.test(em)) {
+        const score = emailScore(em, siteDomain);
+        candidates.push({ field:'email', value:em, conf: score>=7?'high':'mid', note:'cloudflare-protection', weight:5, score });
+        debug.push({ type:'email', field:'email', note:'cloudflare-protection', snippet: em });
+      }
+    }
   });
 
+  // Email in data-attribute
+  doc.querySelectorAll('[data-email],[data-mail],[data-contact-email]').forEach(el => {
+    const raw = el.getAttribute('data-email') || el.getAttribute('data-mail') || el.getAttribute('data-contact-email') || '';
+    const em = deobfuscateEmailText(raw);
+    if (EMAIL_RE.test(em)) {
+      const score = emailScore(em, siteDomain);
+      candidates.push({ field:'email', value:em, conf: score>=7?'high':'mid', note:'data-* attribute', weight:4, score });
+      debug.push({ type:'email', field:'email', note:'data-* attribute', snippet: em });
+    }
+  });
+
+  // Mailto
   for (const a of mailNodes){
     const em = (a.getAttribute('href')||'').replace(/^mailto:/i,'').trim();
-    candidates.push({ field:'email', value:em, conf: emailScore(em, siteDomain)>=7?'high':'mid', note:'mailto anchor', weight:4, score: emailScore(em, siteDomain) });
+    if (em) {
+      const score = emailScore(em, siteDomain);
+      candidates.push({ field:'email', value:em, conf: score>=7?'high':'mid', note:'mailto anchor', weight:4, score });
+      debug.push({ type:'email', field:'email', note:'mailto anchor', snippet: (a.textContent||'').trim()||em });
+    }
   }
+
+  // Contact blocks: phones + emails (de-obfuscate text)
   contactBlocks.forEach(b=>{
-    const txt = around(b, 800);
-    const emails = (txt.match(EMAIL_RE)||[]);
-    emails.forEach(em => candidates.push({ field:'email', value:em, conf: emailScore(em, siteDomain)>=7?'high':'mid', note:'contact-block', weight:3, score: emailScore(em, siteDomain) }));
+    const txt = around(b, 900);
+    (txt.match(PHONE_RE)||[]).map(normalizePhone).forEach(ph => { candidates.push({ field:'phone', value:ph, conf:'mid', note:'contact-block', weight:3 }); debug.push({type:'phone', field:'phone', note:'contact-block', snippet: txt.slice(0,200)}); });
+    (deobfuscateEmailText(txt).match(EMAIL_RE)||[]).forEach(em => { const sc=emailScore(em, siteDomain); candidates.push({ field:'email', value:em, conf: sc>=7?'high':'mid', note:'contact-block', weight:3, score:sc }); debug.push({type:'email', field:'email', note:'contact-block', snippet: txt.slice(0,200)}); });
   });
 
-  const addressTags = Array.from(doc.querySelectorAll('address')).map(el=>el.textContent.replace(/\s+/g,' ').trim());
-  addressTags.forEach(t => candidates.push({ field:'address', value:t, conf: TOPONYM_RE.test(t)?'high':'mid', note:'<address>', weight:3 }));
+  // <address> tags
+  Array.from(doc.querySelectorAll('address')).map(el=>el.textContent.replace(/\s+/g,' ').trim()).forEach(t => {
+    candidates.push({ field:'address', value:t, conf: TOPONYM_RE.test(t)?'high':'mid', note:'<address>', weight:3 });
+    debug.push({ type:'address', field:'address', note:'<address>', snippet: t.slice(0,220)});
+  });
 
+  // Microdata
   if (micStreet || micLocality || micPostal){
     const addr = join([micStreet, micPostal, micLocality]);
     candidates.push({ field:'address', value:addr, conf:'high', note:'microdata itemprop', weight:4 });
     if (micLocality) candidates.push({ field:'city', value:micLocality, conf:'high', note:'microdata locality', weight:4 });
+    debug.push({ type:'address', field:'address', note:'microdata', snippet: addr });
   }
 
-  mapNodes.forEach(a=>{
+  // Maps-anchors → possible address
+  Array.from(doc.querySelectorAll('a[href*="goo.gl/maps"], a[href*="google.com/maps"]')).forEach(a=>{
     const t = (a.textContent||'').trim();
     if (t && (ADDR_RE.test(t) || CAP_RE.test(t))) {
-      candidates.push({ field:'address', value:t, conf: TOPONYM_RE.test(t)?'mid':'low', note:'maps anchor text', weight:2 });
+      candidates.push({ field:'address', value:t, conf: TOPONYM_RE.test(t)?'mid':'low', note:'maps anchor', weight:2 });
+      debug.push({ type:'address', field:'address', note:'maps anchor', snippet: t.slice(0,220) });
     }
   });
 
-  const allBlocks = contactBlocks.length? contactBlocks : [doc.body];
-  allBlocks.forEach(b=>{
-    const t = around(b, 1200);
-    const cap = (t.match(CAP_RE)||[])[0];
-    const addr = (t.match(ADDR_RE)||[])[0];
-    if (addr) candidates.push({ field:'address', value:addr + (cap?(' '+cap):''), conf: cap?'mid':'low', note:'regex address', weight:2 });
-    if (cap){
-      const cityFromProv = (t.match(/\b([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*\([A-Z]{2}\)/)||[])[1];
-      if (cityFromProv) candidates.push({ field:'city', value:cityFromProv, conf:'mid', note:'city+prov', weight:2 });
-    }
+  // Body-wide fallback (emails offuscate nel testo)
+  const fullText = deobfuscateEmailText(doc.body?.innerText || '');
+  (fullText.match(EMAIL_RE) || []).forEach(em => {
+    const score = emailScore(em, siteDomain);
+    candidates.push({ field:'email', value:em, conf: score>=7?'high':'mid', note:'body-fallback', weight:1, score });
+    debug.push({ type:'email', field:'email', note:'body-fallback', snippet: em.slice(0,120) });
   });
 
-  return aggregateCandidates(candidates, baseUrl);
+  // Aggregate
+  const contact = aggregateCandidates(candidates, baseUrl);
+  contact._debug = debug;
+  contact._sourceHint = candidates[0]?.note || '';
+  return contact;
 }
+
 function aggregateCandidates(cands, baseUrl){
   const confRank = { low:1, mid:2, high:3 };
   cands.sort((a,b) => (b.weight - a.weight) || (confRank[b.conf]-confRank[a.conf]) || ((b.score||0)-(a.score||0)));
   const out = { name:'', city:'', address:'', phone:'', email:'', confidence:{name:'low',city:'low',address:'low',phone:'low',email:'low'} };
   for (const c of cands){ if (!out[c.field]) { out[c.field] = c.value; out.confidence[c.field] = c.conf; } }
   if (out.phone) out.phone = normalizePhone(out.phone);
-  if (!out.city && CAP_RE.test(out.address||'')){
-    const m = (out.address||'').split(',').map(s=>s.trim()).find(s => CAP_RE.test(s) || PROV_RE.test(s));
-    if (m){ out.city = m.replace(CAP_RE,'').replace(PROV_RE,'').trim(); out.confidence.city = 'mid'; }
+  if (!out.city && /,/.test(out.address||'')){
+    const parts = (out.address||'').split(',').map(s=>s.trim());
+    const piece = parts.find(s => CAP_RE.test(s) || PROV_RE.test(s));
+    if (piece){ out.city = piece.replace(CAP_RE,'').replace(PROV_RE,'').trim(); out.confidence.city = 'mid'; }
   }
   if ((!out.name || out.name.length<3) && baseUrl){
     try{ const host = new URL(baseUrl).hostname.replace(/^www\./,''); out.name = out.name || host; }catch{}
@@ -455,23 +579,8 @@ function aggregateCandidates(cands, baseUrl){
   out._source = 'dom';
   return out;
 }
-function extractContactsFromText(text, baseUrl){
-  const emails = (text.match(EMAIL_RE)||[]);
-  const phones = (text.match(PHONE_RE)||[]);
-  const address = (text.match(ADDR_RE)||[])[0];
-  const cap = (text.match(CAP_RE)||[])[0];
-  const cityFromProv = (text.match(/\b([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*\([A-Z]{2}\)/)||[])[1];
-  const city = cityFromProv || (address ? address.split(',').map(s=>s.trim()).find(s => CAP_RE.test(s) || PROV_RE.test(s))?.replace(CAP_RE,'').replace(PROV_RE,'').trim() : undefined);
-  const pickEmail = emails.sort((a,b)=> b.length-a.length)[0];
-  const pickPhone = phones.sort((a,b)=> (a.length<b.length?1:-1))[0];
-  return {
-    name: undefined,
-    address: address ? (address + (cap?(' '+cap):'')) : undefined,
-    city, phone: pickPhone ? normalizePhone(pickPhone) : undefined, email: pickEmail,
-    confidence: { name:'low', address: address?'mid':'low', city: city?'mid':'low', phone: pickPhone?'mid':'low', email: pickEmail?'mid':'low' },
-    _source: 'text'
-  };
-}
+
+// Extract multiple locations (multisede) by headline hints
 function extractLocationsFromDOM(html, baseUrl){
   const doc = new DOMParser().parseFromString(html,'text/html');
   const heads = Array.from(doc.querySelectorAll('h2, h3')).filter(h => CITY_HINTS.test(h.textContent||''));
@@ -502,32 +611,63 @@ function dedupeLocations(locs){
 function buildLocations(jsonLdNodes, pages, mainHtml){
   const baseUrl = pages?.[0]?.url || '';
   const locs = [];
+  const debugBlocks = []; // for footer/contatti snippets
+
   for (const n of jsonLdNodes){ const c=contactFromNode(n); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
+
   for (const n of jsonLdNodes){
     const deps = [].concat(n.department||[], n.subOrganization||[]);
     for (const d of deps){ const c=contactFromNode(d); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
   }
+
   for (const p of pages){
     const d = extractContactsFromDOM(p.html||'', baseUrl);
+    if (d._debug) debugBlocks.push(...d._debug.map(x=>({ ...x, page:p.url })));
     if (hasAnyContact(d)) locs.push(d);
     const many = extractLocationsFromDOM(p.html||'', baseUrl);
-    many.forEach(m => locs.push(m));
+    many.forEach(m => { if (m._debug) debugBlocks.push(...m._debug.map(x=>({ ...x, page:p.url }))); locs.push(m); });
   }
+
   for (const p of pages){
     if (p.url === 'pasted://'){
       const t = extractContactsFromText(p.text||'', baseUrl);
+      if (t._debug) debugBlocks.push(...t._debug.map(x=>({ ...x, page:p.url })));
       if (hasAnyContact(t)) locs.push(t);
     }
   }
+
   if (!locs.length){
     const doc = new DOMParser().parseFromString(mainHtml||'','text/html');
     const title = (doc.querySelector('title')?.textContent||'').trim();
     if (title) locs.push({ name: title, confidence:{name:'mid'} });
   }
+
+  window.__debug = window.__debug || {};
+  window.__debug.blocks = debugBlocks;
   return dedupeLocations(locs);
 }
 
-// ================== Detection (14 aree) ==================
+// Text-only fallback (when pasting text)
+function extractContactsFromText(text, baseUrl){
+  const emails = (deobfuscateEmailText(text).match(EMAIL_RE)||[]);
+  const phones = (text.match(PHONE_RE)||[]);
+  const address = (text.match(ADDR_RE)||[])[0];
+  const cap = (text.match(CAP_RE)||[])[0];
+  const cityFromProv = (text.match(/\b([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*\([A-Z]{2}\)/)||[])[1];
+  const city = cityFromProv || (address ? address.split(',').map(s=>s.trim()).find(s => CAP_RE.test(s) || PROV_RE.test(s))?.replace(CAP_RE,'').replace(PROV_RE,'').trim() : undefined);
+  const pickEmail = emails.sort((a,b)=> b.length-a.length)[0];
+  const pickPhone = phones.sort((a,b)=> (a.length<b.length?1:-1))[0];
+  return {
+    name: undefined,
+    address: address ? (address + (cap?(' '+cap):'')) : undefined,
+    city, phone: pickPhone ? normalizePhone(pickPhone) : undefined, email: pickEmail,
+    confidence: { name:'low', address: address?'mid':'low', city: city?'mid':'low', phone: pickPhone?'mid':'low', email: pickEmail?'mid':'low' },
+    _source: 'text',
+    _debug: [{ type:'text-fallback', field:'all', note:'estrazione su testo incollato', snippet: (text||'').slice(0,220) }]
+  };
+}
+
+// Detection (14 aree + booking evidence)
 const BOOKING_PROVIDERS_RE = /miodottore|docplanner|doctolib|cupsolidale|dottori\.it|prenotami\.cloud|calendly\.com|simplybook|setmore|acuityscheduling|youcanbook\.me/i;
 const BOOKING_KEYWORDS_RE = /(prenota(zione)?(\s*online)?|prenota\s*ora|book(ing)?|appuntamenti?|agenda|cup|prenotami|richiedi\s+(appuntamento|visita))/i;
 const PHONE_STRESS = /(linee? occupat[ae]|sempre occupato|attesa|richiama(re)?|chiamare per prenotare)/i;
@@ -545,19 +685,35 @@ const META_TITLE_RE = /<title>[^<]{10,}<\/title>/i;
 const META_DESC_RE  = /<meta[^>]*name=["']description["'][^>]*content=["'][^"']{40,}["']/i;
 const ADS_RE        = /(gtag\(|googletagmanager|googleads|fbq\(|facebook\.com\/tr|pixel\.facebook)/i;
 const SOCIAL_LINKS_RE = /(facebook\.com|instagram\.com|linkedin\.com)/i;
-const REVIEWS_RE      = /(recensioni|opinioni|valutazioni|google reviews|widget recensioni|trustpilot|miodottore)/i;
+const REVIEWS_RE      = /(recensioni|opinioni|valutazioni|google reviews|trustpilot|miodottore)/i;
 
 function detectAreas(pages){
   const concat = pages.map(p => (p.text||'')).join(' ').toLowerCase();
   const htmlAll = pages.map(p => p.html||'').join('\n');
 
+  // provider presence via iframe/src
+  const providerIframes = (htmlAll.match(/<iframe[^>]+src=["'][^"']+["'][^>]*>/gi)||[]).map(x=>x.toLowerCase()).filter(x=>BOOKING_PROVIDERS_RE.test(x));
+  const providerScripts = (htmlAll.match(/<script[^>]+src=["'][^"']+["'][^>]*>/gi)||[]).map(x=>x.toLowerCase()).filter(x=>BOOKING_PROVIDERS_RE.test(x));
+
+  // JSON-LD ReserveAction
+  const jsonld = pages.flatMap(p => extractJsonLd(p.html||""));
+  const reserveAction = jsonld.some(n => {
+    try {
+      const pa = n.potentialAction || n.PotentialAction || n.action || null;
+      if (!pa) return false;
+      const arr = Array.isArray(pa) ? pa : [pa];
+      return arr.some(a => /ReserveAction/i.test(a['@type']||'') || /BookAction/i.test(a['@type']||''));
+    } catch { return false; }
+  });
+
   function detectBooking(){
-    const providerHit = BOOKING_PROVIDERS_RE.test(concat);
+    const providerHit = BOOKING_PROVIDERS_RE.test(concat) || providerIframes.length>0 || providerScripts.length>0 || reserveAction;
     const bookingWord = BOOKING_KEYWORDS_RE.test(concat);
-    if (providerHit) return { score:2, confidence:'high', evidence:'Provider/widget prenotazione rilevato' };
-    if (bookingWord) return { score:5, confidence:'mid', evidence:'Segnali di prenotazione (testo/link)' };
-    return { score:10, confidence:'mid', evidence:'Nessuna evidenza di prenotazione online' };
+    if (providerHit) return { score:2, confidence:'high', evidence: 'Provider/widget o ReserveAction rilevati' };
+    if (bookingWord) return { score:5, confidence:'mid', evidence: 'Segnali di prenotazione (testo/link)' };
+    return { score:10, confidence:'mid', evidence: 'Nessuna evidenza di prenotazione online' };
   }
+
   function detectTelefonate(hasBooking){
     const stress = PHONE_STRESS.test(concat);
     if (stress) return { score:8, confidence:'mid', evidence:'Testo con attese/telefono' };
@@ -603,12 +759,17 @@ function detectAreas(pages){
   const social = detectSocial();
   const reputazione = detectReviews();
 
+  window.__debug = window.__debug || {};
+  window.__debug.booking = {
+    providerIframes, providerScripts, reserveAction, keywords: BOOKING_KEYWORDS_RE.test(concat)
+  };
+
   return {
     areas: { booking, telefonate, orari, whatsapp, crescita, doppioSistema, dimensione, serviziCall, decisionMaker, numeroDiretto, seoBase, advAttiva, social, reputazione }
   };
 }
 
-// ================== Scoring, Top5, Script, Pitch ==================
+// Scoring + rendering
 function scoreAll(areas){
   let sum=0, denom=0, covered=0;
   for(const [k,a] of Object.entries(areas)){
@@ -654,7 +815,7 @@ function topWeaknesses(areas, n=5){
 }
 function renderTop5(t5){
   const colors = ['#ff6b6b','#ff9f43','#f1c40f','#4aa3ff','#2ecc71'];
-  $('#top5').innerHTML = t5.map((x,i)=>'<div class="chip" title="'+esc(x.evidence)+'" style="border-color:'+colors[i]+';box-shadow:0 0 0 1px '+colors[i]+' inset"><strong>'+(i+1)+'. '+esc(x.label)+'</strong> ('+x.score.toFixed(1)+')</div>').join('');
+  $('#top5').innerHTML = t5.map((x,i)=>'<div class="chip" title="'+esc(x.evidence)+'" onclick="alert(\''+esc(x.label)+'\\n\\n'+esc(x.evidence||'')+'\')" style="border-color:'+colors[i]+';box-shadow:0 0 0 1px '+colors[i]+' inset"><strong>'+(i+1)+'. '+esc(x.label)+'</strong> ('+x.score.toFixed(1)+')</div>').join('');
 }
 function setGauge(v){
   $('#scoreText').textContent = v.toFixed(1);
@@ -665,6 +826,7 @@ function setGauge(v){
   const deg = -90 + (Math.min(10,Math.max(0,v))/10)*180;
   $('#needle').style.transform = 'rotate('+deg+'deg)';
 }
+
 function proposeSlots(){
   const day = ["dom","lun","mar","mer","gio","ven","sab"];
   const d1=new Date(); d1.setDate(d1.getDate()+1); d1.setHours(11,30,0,0);
@@ -695,26 +857,31 @@ function buildPitchMail(contact, reasons){
   return { subject: ogg, body };
 }
 
-// ================== Provenance ==================
+// Provenance & debug
 function renderProvenance(pages){
-  $('#prov').innerHTML = pages.map(p => '<div class="box"><div class="muted">'+esc(p.role||'page')+'</div><div style="font-size:13px">'+esc(p.url||'')+'</div><div class="muted" style="font-size:12px">'+(p.text?.length||0)+' chars</div></div>').join('');
+  $('#prov').innerHTML = pages.map(p => '<div class="box" style="background:#0f1532;border:1px solid #2a3260;border-radius:12px;padding:10px"><div class="muted">'+esc(p.role||'page')+'</div><div style="font-size:13px">'+esc(p.url||'')+'</div><div class="muted" style="font-size:12px">'+(p.text?.length||0)+' chars</div></div>').join('');
+}
+function renderDebug(){
+  const dbg = window.__debug||{};
+  const contacts = (dbg.blocks||[]).filter(x=>x.type==='phone'||x.type==='email'||x.type==='address'||x.type==='city');
+  $('#dbgContactsCount').textContent = contacts.length;
+  $('#dbgContacts').innerHTML = contacts.map(x => '<div class="snip"><strong>['+esc(x.type)+']</strong> '+esc(x.note)+' <span class="muted">('+esc(x.page||'')+')</span>\n'+esc((x.snippet||'').slice(0,220))+'</div>').join('') || '<div class="muted">—</div>';
+
+  const blocks = (dbg.blocks||[]).filter(x=>x.note && /footer|contact-block|regex address|maps|microdata|<address>|dom:name|cloudflare-protection|data-\*/i.test(x.note||''));
+  $('#dbgBlocksCount').textContent = blocks.length;
+  $('#dbgBlocks').innerHTML = blocks.map(x => '<div class="snip"><strong>'+esc(x.note)+'</strong> <span class="muted">('+esc(x.page||'')+')</span>\n'+esc((x.snippet||'').slice(0,280))+'</div>').join('') || '<div class="muted">—</div>';
+
+  const bk = dbg.booking||{};
+  const lines = [];
+  if (bk.providerIframes?.length) lines.push('iframe: '+bk.providerIframes.length+' match');
+  if (bk.providerScripts?.length) lines.push('script: '+bk.providerScripts.length+' match');
+  if (bk.reserveAction) lines.push('JSON-LD: ReserveAction');
+  if (bk.keywords) lines.push('keyword: prenota/booking');
+  $('#dbgBookingCount').textContent = lines.length || 0;
+  $('#dbgBooking').innerHTML = lines.length ? lines.map(s=>'<div class="snip">'+esc(s)+'</div>').join('') : '<div class="muted">—</div>';
 }
 
-// ================== Reset UI ==================
-function resetAnalysisUI(){
-  $("#url").value = "";
-  $("#name").value = ""; $("#city").value=""; $("#phone").value=""; $("#email").value=""; $("#address").value="";
-  $("#script").value = ""; $("#mailSubj").value=""; $("#mailBody").value=""; $("#pasted").value="";
-  $("#areasBody").innerHTML = ""; $("#coverage").textContent="Copertura segnali: 0%"; $("#top5").innerHTML="";
-  $("#sedeLabel").textContent = "—"; $("#locSelect").innerHTML = "";
-  setGauge(0); setProgress(0); setStatus("Pronto.");
-  window.__locations=[]; window.__locIndex=-1; window.__lastLead=null;
-  $("#url").focus();
-}
-
-// ================== UI helpers ==================
-function setStatus(t){ $('#status').textContent = t; }
-function setProgress(p){ $('#pbar').style.width = p+'%'; }
+// UI state
 function setConfs(c){
   const map = {low:'conf-low',mid:'conf-mid',high:'conf-high'};
   $("#confName").className = "badge "+(map[c?.name||'low']||'conf-low'); $("#confName").textContent = "name: "+(c?.name||'low');
@@ -725,6 +892,7 @@ function setConfs(c){
 }
 function renderContact(loc){
   $("#name").value = loc.name||""; $("#city").value=loc.city||""; $("#phone").value=loc.phone||""; $("#email").value=loc.email||""; $("#address").value=loc.address||"";
+  $("#sourceHint").value = loc._sourceHint||loc._source||'';
   setConfs(loc.confidence||{});
 }
 function updateLocLabel(){
@@ -740,11 +908,23 @@ function refreshComms(){
   const nm = $("#name").value || (window.__locations?.[window.__locIndex||0]?.name)||"—";
   $("#script").value = buildScript(nm, reasons);
   const pitch = buildPitchMail({ name: $("#name").value, city: $("#city").value }, reasons);
-  $("#mailSubj").value = pitch.subject; "#mailBody".value = pitch.body;
-  $("#mailBody").value = pitch.body;
+  $("#mailSubj").value = pitch.subject; $("#mailBody").value = pitch.body;
 }
 
-// ================== Analyze flow ==================
+// Reset analysis to accept a new link
+function resetAnalysisUI(){
+  $("#url").value = "";
+  $("#name").value = ""; $("#city").value=""; $("#phone").value=""; $("#email").value=""; $("#address").value="";
+  $("#sourceHint").value = "";
+  $("#script").value = ""; $("#mailSubj").value=""; $("#mailBody").value=""; $("#pasted").value="";
+  $("#areasBody").innerHTML = ""; $("#coverage").textContent="Copertura segnali: 0%"; $("#top5").innerHTML="";
+  $("#sedeLabel").textContent = "—"; $("#locSelect").innerHTML = "";
+  setGauge(0); setProgress(0); setStatus("Pronto.");
+  window.__locations=[]; window.__locIndex=-1; window.__lastLead=null; window.__debug={};
+  $("#url").focus();
+}
+
+// Analyze flow
 async function analyze(){
   const url = $('#url').value.trim();
   const pasted = $('#pasted').value.trim();
@@ -765,12 +945,11 @@ async function analyze(){
       const links = pickLinks(base, main.html);
 
       setStatus('Lettura sottopagine…'); setProgress(55);
-      for (const l of links){
-        try{
-          const sub = await edgeFetch(l);
-          pages.push({ url:l, role:"other", html: sub.html, text: extractText(sub.html) });
-        }catch{}
-      }
+      const subs = await fetchPool(links, 3, async (l)=>{
+        const sub = await edgeFetch(l);
+        return { url:l, html: sub.html, text: extractText(sub.html) };
+      });
+      subs.filter(x=>x.ok).forEach(x => pages.push({ url:x.url, role:"other", html:x.val.html, text:x.val.text }));
     }
 
     setStatus('Parsing JSON-LD & contatti…'); setProgress(70);
@@ -788,6 +967,7 @@ async function analyze(){
     $('#coverage').textContent = 'Copertura segnali: '+sc.coverage+'%';
     const t5 = topWeaknesses(det.areas, 5); renderTop5(t5);
     renderProvenance(pages);
+    renderDebug();
 
     const reasons = t5.slice(0,3).map(x=>x.label);
     const nm = $("#name").value || locations[0]?.name || (new DOMParser().parseFromString(pages[0]?.html||'','text/html').querySelector('title')?.textContent||"");
@@ -807,7 +987,7 @@ async function analyze(){
   }
 }
 
-// ================== Queue & Export ==================
+// Queue & export
 function temperature(v){ return v>=8?'hot':v>=5?'warm':'cold'; }
 function renderQueue(){
   const term = $('#search')?.value?.toLowerCase()||'';
@@ -876,7 +1056,7 @@ function copyContacts(){
   navigator.clipboard.writeText(txt).then(()=>toast('Contatti copiati'));
 }
 
-// ================== Bindings ==================
+// Bindings
 $('#analyze').addEventListener('click', analyze);
 $('#saveLead').addEventListener('click', addLead);
 $('#exportJSON').addEventListener('click', exportJSON);
@@ -884,7 +1064,6 @@ $('#exportCSV').addEventListener('click', exportCSV);
 $('#resetAll').addEventListener('click', ()=>{ if(confirm('Reset impostazioni + coda?')){ localStorage.removeItem(STORAGE); state=S.load(); renderQueue(); resetAnalysisUI(); toast('Reset eseguito.'); } });
 $('#btnSettings').addEventListener('click', ()=>{
   $('#proxyEndpoint').value = (S.load().proxyEndpoint||DEFAULTS.proxyEndpoint);
-  $('#forceProxy').checked = !!S.load().forceProxy;
   $('#resetAfterSave').checked = S.load().resetAfterSave!==false;
   $('#dlg').showModal();
 });
@@ -892,7 +1071,6 @@ $('#saveSettings').addEventListener('click', (e)=>{
   e.preventDefault();
   const s = S.load();
   s.proxyEndpoint = $('#proxyEndpoint').value.trim()||DEFAULTS.proxyEndpoint;
-  s.forceProxy = $('#forceProxy').checked;
   s.resetAfterSave = $('#resetAfterSave').checked;
   S.save(s);
   $('#dlg').close();
@@ -912,5 +1090,4 @@ renderQueue(); setGauge(0); setStatus('Pronto.');
 </script>
 </body>
 </html>
-
 
