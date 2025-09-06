@@ -207,3 +207,4 @@ function attachCors(resp, extraHeaders){
   for (const [k,v] of Object.entries(extraHeaders||{})) h.set(k,v);
   return new Response(resp.body, { status: resp.status, headers: h });
 }
+
