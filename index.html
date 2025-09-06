@@ -3,574 +3,787 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>QPWON – Scoring Sprint (Auto-Analyzer · Proxy-Ready)</title>
-  <meta name="description" content="Inserisci il link del centro. Il tool legge alcune pagine pubbliche, estrae segnali e calcola lo score per area. Proxy integrato per evitare CORS." />
+  <title>QPWON · Scoring Sprint (v1.2)</title>
+  <meta name="description" content="Analizza un sito di poliambulatorio e genera una scheda lead completa: score, top 5 punti deboli, contatti auto-compilati, script e pitch mail. Nessuna dipendenza." />
   <style>
     :root{
-      --bg:#0f1220; --bg2:#0c101d; --card:#151a2e; --edge:#283060;
-      --text:#e7ecff; --muted:#9fb3db; --accent:#7c5cff;
+      --bg:#0f1220; --bg2:#121735; --card:#1b2140; --surface:#161c39; --line:#283060;
+      --text:#e7ecff; --muted:#9fb3db;
+      --accent:#7c5cff; --accent-2:#5c87ff;
       --good:#2ecc71; --warn:#f1c40f; --cold:#4aa3ff; --danger:#ff6b6b;
-      --shadow:0 10px 30px rgba(0,0,0,.35); --r:18px;
+      --shadow:0 8px 24px rgba(0,0,0,.35); --r:18px;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:linear-gradient(120deg,var(--bg),var(--bg2));color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Helvetica,Arial,sans-serif}
-    a{color:var(--accent);text-decoration:none}
-    a:hover{text-decoration:underline}
-    header{position:sticky;top:0;z-index:10;background:rgba(12,15,28,.75);backdrop-filter:blur(10px);border-bottom:1px solid #1d2447}
+    body{
+      margin:0; background:linear-gradient(120deg,#0e1324,#0a0f1d); color:var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      font-feature-settings:"tnum" 1, "cv05" 1;
+    }
+    a{color:var(--accent)}
+    header{position:sticky;top:0;z-index:15;background:rgba(10,15,29,.7);backdrop-filter:blur(8px);border-bottom:1px solid #1f2648}
     .topbar{display:flex;gap:12px;align-items:center;padding:12px 16px}
     .brand{font-weight:800;letter-spacing:.2px}
-    .pill{padding:6px 10px;border-radius:999px;border:1px solid #2a3260;background:#1b2143;color:var(--muted);font-size:12px}
-    .spacer{flex:1}
-    button{appearance:none;border:1px solid #2a3260;border-radius:10px;padding:10px 14px;background:#202955;color:#fff;cursor:pointer;box-shadow:var(--shadow);transition:filter .15s,transform .06s}
-    button:hover{filter:brightness(1.05)}
-    button:active{transform:translateY(1px)}
-    .btn-ghost{background:transparent}
-    .btn-accent{background:var(--accent);border-color:#543cff}
-    .btn-good{background:var(--good);color:#092015;border-color:#1f9f52}
-    .btn-danger{background:var(--danger);border-color:#ff6b6b}
-    input,textarea,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #33407a;background:#0f1532;color:#e7ecff;outline:none}
-    textarea{min-height:84px;resize:vertical}
-    main{padding:18px;display:grid;gap:18px;grid-template-columns:1.3fr 1fr 1.1fr}
-    @media (max-width:1200px){ main{grid-template-columns:1fr} }
-    .card{background:linear-gradient(180deg,#1a2147,#111739);border:1px solid var(--edge);border-radius:var(--r);box-shadow:var(--shadow)}
-    .card>h2{margin:0;padding:14px 16px;border-bottom:1px solid var(--edge);font-size:16px;color:#cfe1ff;display:flex;align-items:center;gap:10px}
-    .content{padding:14px 16px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .col{display:flex;flex-direction:column;gap:10px}
     .muted{color:var(--muted)}
+    .spacer{flex:1}
+    .pill{padding:6px 10px;border:1px solid #2a3260;border-radius:999px;color:var(--muted);font-size:12px}
+    button{appearance:none;border:1px solid #2a3260;border-radius:10px;padding:10px 14px;background:#202955;color:#fff;cursor:pointer;box-shadow:var(--shadow)}
+    button.btn-accent{background:var(--accent);border-color:#543cff}
+    button.btn-ghost{background:transparent}
+    button.btn-danger{background:var(--danger);border-color:#ff6b6b}
+    input,textarea,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #33407a;background:#0f1532;color:#e7ecff;outline:none}
+    textarea{min-height:110px;resize:vertical}
+    main{padding:18px;display:grid;gap:18px;grid-template-columns:1.2fr 1.4fr 1.1fr}
+    @media (max-width:1200px){ main{grid-template-columns:1fr} }
+    .card{background:linear-gradient(180deg,#1a2145,#12183a);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+    .card>h2{margin:0;padding:14px 16px;border-bottom:1px solid var(--line);font-size:16px;color:#cdd9ff;display:flex;align-items:center;gap:8px}
+    .content{padding:14px 16px}
+    .row{display:flex;gap:10px;align-items:center}
+    .col{display:flex;flex-direction:column;gap:10px}
     .progress{height:8px;border:1px solid #25305b;border-radius:999px;overflow:hidden;background:#0d1430}
-    .progress>div{height:100%;background:linear-gradient(90deg,var(--accent),#5c87ff);width:0%}
-    .bookmarklet{display:flex;gap:10px;align-items:center;background:#0e1430;border:1px dashed #2a3260;padding:10px;border-radius:12px}
-    .bookmarklet a{display:inline-block;padding:8px 10px;border:1px solid #2a3260;border-radius:8px;background:#1a2350;color:#fff}
-    .gauge-wrap{display:flex;align-items:center;justify-content:center;padding:8px 0}
+    .progress>div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%}
+    .gauge-wrap{display:flex;align-items:center;justify-content:center;padding:6px 0}
     .gauge{width:280px;height:160px}
     .needle{transform-origin:140px 140px;transition:transform .4s ease}
-    .score-big{font-size:46px;font-weight:800;text-align:center;margin-top:-6px}
-    .band{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:2px}
+    .score-big{font-size:48px;font-weight:800;text-align:center;margin-top:0}
+    .band{display:flex;gap:8px;justify-content:center;align-items:center}
     .dot{width:12px;height:12px;border-radius:50%}
     .dot.cold{background:var(--cold)} .dot.warm{background:var(--warn)} .dot.hot{background:var(--good)}
+    .chip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #31407a;border-radius:999px;background:#141a3a;font-size:13px;margin:4px 6px 0 0}
+    .chip strong{font-weight:700}
     table{width:100%;border-collapse:separate;border-spacing:0 8px}
     th,td{font-size:13px;padding:8px 10px;text-align:left} thead th{color:#cfe1ff}
-    tbody tr{background:#10163a;border:1px solid var(--edge)}
+    tbody tr{background:#11173a;border:1px solid var(--line)}
     tbody tr td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
     tbody tr td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
-    .badge{padding:2px 6px;border-radius:999px;border:1px solid #33407a;font-size:11px;color:#cfe1ff}
-    .conf-low{background:#241a3e} .conf-mid{background:#1f2b55} .conf-high{background:#1a3e2d}
-    .actions button{padding:6px 10px;border-radius:8px}
-    dialog::backdrop{background:rgba(0,0,0,.35)}
+    .badge{padding:2px 6px;border:1px solid #33407a;border-radius:999px;font-size:11px;color:#cfe1ff}
+    .conf-low{background:#231a3d} .conf-mid{background:#1b2a55} .conf-high{background:#173a2d}
+    .kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .kpi .box{background:#0f1532;border:1px solid #2a3260;border-radius:12px;padding:10px}
+    .top5{display:flex;flex-wrap:wrap;gap:8px}
+    .toast{position:fixed;right:16px;top:66px;background:#1b2140;border:1px solid #2a3260;border-radius:10px;padding:10px 14px;box-shadow:var(--shadow);opacity:0;transform:translateY(-6px);transition:all .2s ease;pointer-events:none}
+    .toast.show{opacity:1;transform:translateY(0)}
   </style>
 </head>
 <body>
-  <header>
-    <div class="topbar">
-      <div class="brand">QPWON · <span class="muted">Scoring Sprint</span></div>
-      <span class="pill">Auto-Analyzer · Proxy-ready</span>
-      <div class="spacer"></div>
-      <button id="btnSettings" class="btn-ghost">Impostazioni</button>
-      <button id="btnTestProxy" class="btn-ghost">Test proxy</button>
-      <button id="exportCSV" class="btn-ghost">Export CSV</button>
-      <button id="exportJSON" class="btn-ghost">Export JSON</button>
-      <label class="btn-ghost" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">Import JSON
-        <input id="importJSON" type="file" accept="application/json" style="display:none" />
-      </label>
-      <button id="resetAll" class="btn-danger">Reset</button>
+<header>
+  <div class="topbar">
+    <div class="brand">QPWON · <span class="muted">Scoring Sprint</span></div>
+    <span class="pill">v1.2 · no deps</span>
+    <div class="spacer"></div>
+    <button id="btnSettings" class="btn-ghost">Impostazioni</button>
+    <button id="exportJSON" class="btn-ghost">Export JSON</button>
+    <button id="exportCSV" class="btn-ghost">Export CSV</button>
+    <button id="resetAll" class="btn-danger">Reset</button>
+  </div>
+</header>
+
+<main>
+  <!-- Col A -->
+  <section class="card">
+    <h2>1) URL → Analisi automatica</h2>
+    <div class="content col">
+      <div class="row">
+        <input id="url" type="url" placeholder="Incolla l'URL (es. https://www.polixyz.it)" />
+        <button id="analyze" class="btn-accent">Analizza</button>
+      </div>
+      <div class="progress"><div id="pbar"></div></div>
+      <div id="status" class="muted">Pronto.</div>
+
+      <details style="margin-top:6px">
+        <summary class="muted">Problemi di lettura? (Siti solo JS) • Incolla testo</summary>
+        <textarea id="pasted" placeholder="Incolla qui il testo della pagina (bookmarklet) e poi premi Analizza"></textarea>
+      </details>
+
+      <details style="margin-top:8px">
+        <summary class="muted">Provenance (debug)</summary>
+        <div id="prov" class="kpi" style="margin-top:8px"></div>
+      </details>
     </div>
-  </header>
+  </section>
 
-  <main>
-    <!-- SEZIONE 1: URL -> ANALISI -->
-    <section class="card">
-      <h2>1) URL → Analisi automatica</h2>
-      <div class="content col">
-        <div class="row">
-          <input id="url" type="url" placeholder="Incolla l'URL (es. https://www.polixyz.it)" />
-          <button id="analyze" class="btn-accent">Analizza</button>
-        </div>
-        <div class="progress"><div id="pbar"></div></div>
-        <div id="status" class="muted">Pronto.</div>
-        <details>
-          <summary class="muted">Se il sito blocca (CORS), ecco le alternative</summary>
-          <div class="bookmarklet">
-            <div>1) Trascina questo nei preferiti:</div>
-            <a id="bm" href="#">Analizza questa pagina</a>
-            <div>2) Vai sul sito del centro e cliccalo → copia il testo.<br/>3) Torna qui, incolla sotto e premi <b>Analizza testo</b>.</div>
-          </div>
-          <textarea id="pasted" placeholder="Incolla qui il testo copiato dal sito…"></textarea>
-          <div class="row" style="justify-content:flex-end"><button id="analyzePasted" class="btn-ghost">Analizza testo</button></div>
-        </details>
-      </div>
-    </section>
-
-    <!-- SEZIONE 2: SCORE & AREE -->
-    <section class="card">
-      <h2>2) Score complessivo & aree</h2>
-      <div class="content col">
-        <div class="gauge-wrap">
-          <div class="gauge">
-            <svg viewBox="0 0 280 160" xmlns="http://www.w3.org/2000/svg" aria-label="Gauge">
-              <defs>
-                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="var(--cold)"/>
-                  <stop offset="50%" stop-color="var(--warn)"/>
-                  <stop offset="100%" stop-color="var(--good)"/>
-                </linearGradient>
-              </defs>
-              <path d="M 20 140 A 120 120 0 0 1 260 140" fill="none" stroke="#23305e" stroke-width="16" stroke-linecap="round"/>
-              <path id="arc" d="M 20 140 A 120 120 0 0 1 260 140" fill="none" stroke="url(#grad)" stroke-width="16" stroke-linecap="round" stroke-dasharray="0 377"/>
-              <g id="needle" class="needle">
-                <line x1="140" y1="140" x2="140" y2="42" stroke="#e7ecff" stroke-width="4"/>
-                <circle cx="140" cy="140" r="6" fill="#e7ecff"/>
-              </g>
-            </svg>
-          </div>
-        </div>
-        <div class="score-big" id="scoreText">0.0</div>
-        <div class="band"><span>Pallino:</span> <span class="dot cold" id="dot"></span> <span id="tempText" class="muted">freddo</span></div>
-        <div class="muted" id="coverage">Copertura segnali: 0%</div>
-
-        <table>
-          <thead><tr><th>Area</th><th>Score</th><th>Confidenza</th><th>Evidenza</th></tr></thead>
-          <tbody id="areasBody"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- SEZIONE 3: SCRIPT & CODA -->
-    <section class="card">
-      <h2>3) Script & coda</h2>
-      <div class="content col">
-        <label>Nome struttura</label>
-        <input id="name" type="text" placeholder="Es. Poliambulatorio XYZ" />
-        <label>Città</label>
-        <input id="city" type="text" placeholder="Es. Bologna" />
-        <label>Telefono (per chiamata/WA)</label>
-        <input id="phone" type="tel" placeholder="+39…" />
-        <label>Script (WhatsApp / Email)</label>
-        <textarea id="script" placeholder="Verrà generato automaticamente…"></textarea>
-
-        <div class="row" style="justify-content:flex-end; gap:8px">
-          <button id="btnWA" class="btn-good">WhatsApp</button>
-          <button id="btnCall">Chiama</button>
-          <button id="btnEmail" class="btn-ghost">Email</button>
-        </div>
-
-        <div class="row" style="margin-top:8px">
-          <button id="saveQueue" class="btn-accent">Salva & metti in coda</button>
-          <input id="search" type="text" placeholder="Cerca nella coda… (nome, città)" />
-        </div>
-
-        <table>
-          <thead><tr><th>Priorità</th><th>Struttura</th><th>Città</th><th>Score</th><th>Azioni</th></tr></thead>
-          <tbody id="queueBody"></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
-
-  <!-- MODALE IMPOSTAZIONI -->
-  <dialog id="dlg">
-    <form method="dialog" style="min-width:min(680px,95vw);background:#0e1430;border:1px solid #2a3260;color:#e7ecff;border-radius:16px;padding:16px">
-      <h3 style="margin:0 0 10px 0;">Impostazioni</h3>
-      <div style="display:grid;gap:10px">
-        <label style="display:flex;align-items:center;gap:8px">
-          <input type="checkbox" id="forceProxy" /> Forza uso proxy per tutte le richieste
-        </label>
-        <div>
-          <label>Endpoint Proxy (Cloudflare Worker o server tuo)</label>
-          <input id="proxyEndpoint" type="url" placeholder="https://TUO-WORKER.workers.dev/?url=" />
-          <div class="muted">Consigliato (già pronto per te): <code id="defaultEP"></code></div>
+  <!-- Col B -->
+  <section class="card">
+    <h2>2) Score complessivo, Top 5 e aree</h2>
+    <div class="content col">
+      <div class="gauge-wrap">
+        <div class="gauge">
+          <svg viewBox="0 0 280 160" xmlns="http://www.w3.org/2000/svg" aria-label="Gauge">
+            <defs>
+              <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="var(--cold)"/>
+                <stop offset="50%" stop-color="var(--warn)"/>
+                <stop offset="100%" stop-color="var(--good)"/>
+              </linearGradient>
+            </defs>
+            <path d="M 20 140 A 120 120 0 0 1 260 140" fill="none" stroke="#23305e" stroke-width="14" stroke-linecap="round"/>
+            <path id="arc" d="M 20 140 A 120 120 0 0 1 260 140" fill="none" stroke="url(#grad)" stroke-width="14" stroke-linecap="round" stroke-dasharray="0 377"/>
+            <g id="needle" class="needle">
+              <line x1="140" y1="140" x2="140" y2="42" stroke="#e7ecff" stroke-width="4"/>
+              <circle cx="140" cy="140" r="6" fill="#e7ecff"/>
+            </g>
+          </svg>
         </div>
       </div>
-      <div class="row" style="justify-content:flex-end;margin-top:10px">
-        <button value="cancel" class="btn-ghost">Chiudi</button>
-        <button id="saveSettings" class="btn-accent">Salva</button>
+      <div class="score-big" id="scoreText">0.0</div>
+      <div class="band"><span>Pallino:</span> <span id="dot" class="dot cold"></span> <span id="tempText" class="muted">freddo</span></div>
+      <div class="muted" id="coverage">Copertura segnali: 0%</div>
+
+      <div style="margin-top:8px">
+        <div class="row" style="align-items:center;gap:8px">
+          <strong>🔎 5 punti deboli principali</strong>
+        </div>
+        <div id="top5" class="top5" style="margin-top:6px"></div>
       </div>
-    </form>
-  </dialog>
 
-  <script>
-    // ==================== CONFIG & STATO ====================
-    const DEFAULT_ENDPOINT = "https://qpwonscorepro.apesce-consulente.workers.dev/?url="; // il tuo Worker
-    const STORAGE_KEY = "qpwon_scoring_v3";
-    const DEFAULT_STATE = { proxyEndpoint: DEFAULT_ENDPOINT, forceProxy: true, leads: [] };
+      <table style="margin-top:10px">
+        <thead>
+          <tr><th>Area</th><th>Score</th><th>Confidenza</th><th>Evidenza</th></tr>
+        </thead>
+        <tbody id="areasBody"></tbody>
+      </table>
+    </div>
+  </section>
 
-    const $ = s => document.querySelector(s);
-    const $$ = s => Array.from(document.querySelectorAll(s));
-    const S = {
-      load(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || DEFAULT_STATE; }catch{ return DEFAULT_STATE; } },
-      save(v){ localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); }
-    };
-    let state = S.load();
+  <!-- Col C -->
+  <section class="card">
+    <h2>3) Contatti, Script & Coda</h2>
+    <div class="content col">
+      <div id="multiWrap" class="row" style="justify-content:space-between;gap:10px">
+        <div class="row" style="gap:8px"><strong>Sede:</strong><span id="sedeLabel" class="muted">—</span></div>
+        <div class="row" style="gap:6px">
+          <button id="prevLoc" class="btn-ghost">◀</button>
+          <select id="locSelect" style="min-width:220px"></select>
+          <button id="nextLoc" class="btn-ghost">▶</button>
+        </div>
+      </div>
 
-    // ==================== UI UTILS ====================
-    function setStatus(msg){ $("#status").textContent = msg; }
-    function setProgress(pct){ $("#pbar").style.width = pct + "%"; }
-    function clamp(n,min,max){ return Math.min(max, Math.max(min, n)); }
-    function esc(s){ return (s||"").replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-    function uuid(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+      <div class="kpi" style="margin-top:8px">
+        <div class="box">
+          <label>Nome</label><input id="name" type="text" placeholder="Es. Poliambulatorio XYZ" />
+        </div>
+        <div class="box">
+          <label>Città</label><input id="city" type="text" placeholder="Es. Bologna" />
+        </div>
+        <div class="box">
+          <label>Telefono</label><input id="phone" type="tel" placeholder="+39…" />
+        </div>
+        <div class="box">
+          <label>Email</label><input id="email" type="email" placeholder="esempio@dominio.it" />
+        </div>
+        <div class="box" style="grid-column:1/3">
+          <label>Indirizzo</label><input id="address" type="text" placeholder="Via…, CAP…, Città…" />
+        </div>
+      </div>
 
-    // Bookmarklet per recupero testo renderizzato (senza proxy)
-    (function initBookmarklet(){
-      const code = `(function(){try{var t=document.body.innerText||document.body.textContent||'';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t.slice(0,200000)).then(function(){alert('Testo copiato. Torna al tool e clicca \\'Analizza testo\\'.')}).catch(function(e){prompt('Copia questo testo e incollalo nel tool:',t.slice(0,8000))});}else{prompt('Copia questo testo e incollalo nel tool:',t.slice(0,8000));}}catch(e){alert('Errore: '+e.message)}})();`;
-      $("#bm").setAttribute("href","javascript:"+encodeURIComponent(code));
-    })();
+      <div class="row" style="margin-top:4px;gap:8px">
+        <span id="confName"    class="badge conf-low">name: low</span>
+        <span id="confCity"    class="badge conf-low">city: low</span>
+        <span id="confPhone"   class="badge conf-low">phone: low</span>
+        <span id="confEmail"   class="badge conf-low">email: low</span>
+        <span id="confAddress" class="badge conf-low">address: low</span>
+      </div>
 
-    // ==================== HEURISTICS ====================
-    const AREAS = ["booking","telefonate","orari","whatsapp","crescita","doppioSistema","dimensione","serviziCall","decisionMaker","numeroDiretto"];
-    const WEIGHTS = { booking:2, telefonate:2, orari:1, whatsapp:1, crescita:2, doppioSistema:2, dimensione:2, serviziCall:1, decisionMaker:1, numeroDiretto:1 };
+      <div style="margin-top:10px">
+        <div class="row" style="gap:12px">
+          <button id="btnCopyContacts" class="btn-ghost">Copia contatti</button>
+          <button id="btnOpenWA" class="btn-ghost">WhatsApp</button>
+          <button id="btnMailto" class="btn-ghost">Email</button>
+        </div>
+      </div>
 
-    function analyzeTexts(texts){
-      const concat = texts.map(t => (t.text||"")+" ").join(" ").toLowerCase();
-      const score = {}, conf = {}, evidence = {};
+      <div style="margin-top:12px">
+        <div class="row" style="gap:12px">
+          <button id="tabScript" class="btn-accent">Script</button>
+          <button id="tabPitch" class="btn-ghost">Pitch mail</button>
+        </div>
+        <div id="scriptWrap" class="col" style="margin-top:8px">
+          <label>Script (WhatsApp / Call)</label>
+          <textarea id="script" placeholder="Verrà generato automaticamente…"></textarea>
+        </div>
+        <div id="pitchWrap" class="col" style="display:none;margin-top:8px">
+          <label>Oggetto</label><input id="mailSubj" type="text" />
+          <label>Corpo mail</label><textarea id="mailBody"></textarea>
+        </div>
+      </div>
 
-      const md = /miodottore/.test(concat), dl = /doctolib/.test(concat), book = /(prenota|prenotazione|booking|appuntamenti)/.test(concat);
-      if(!book){ score.booking=10; conf.booking="mid"; evidence.booking="Nessuna traccia di prenotazione online"; }
-      else if(md && dl){ score.booking=7; conf.booking="high"; evidence.booking="MD+DL entrambi presenti"; }
-      else if(md || dl){ score.booking=6; conf.booking="high"; evidence.booking="Portale esterno rilevato"; }
-      else { score.booking=5; conf.booking="mid"; evidence.booking="Prenotazione presente ma potenzialmente confusa"; }
+      <div class="row" style="margin-top:10px">
+        <button id="saveLead" class="btn-accent">Salva & metti in coda</button>
+        <input id="search" type="text" placeholder="Cerca nella coda… (nome, città)" />
+      </div>
 
-      const telRe=/(linee occupate|sempre occupato|attesa|richiama|solo telefono|chiamare per prenotare)/;
-      score.telefonate = telRe.test(concat) ? 8 : (book ? 3 : 7);
-      conf.telefonate = telRe.test(concat) ? "mid" : "low";
-      evidence.telefonate = telRe.test(concat) ? "Testo con attese/telefono" : "Indizio indiretto";
+      <table style="margin-top:6px">
+        <thead><tr><th>Priorità</th><th>Struttura</th><th>Città</th><th>Score</th><th>Azioni</th></tr></thead>
+        <tbody id="queueBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
 
-      const hasSat=/(sab|sabato)/.test(concat), times=concat.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/g)||[], late=times.some(t=>{const[h,m]=t.split(":").map(Number);return h>19||(h===19&&m>=30)});
-      score.orari = (hasSat||late) ? 8 : 3; conf.orari=(hasSat||late) ? "mid" : "low"; evidence.orari=(hasSat?"sabato ":"")+(late?"orari ≥19:30":"");
+<!-- Impostazioni -->
+<dialog id="dlg">
+  <form method="dialog" style="min-width:min(700px,95vw);background:#0e1430;border:1px solid #2a3260;color:#e7ecff;border-radius:14px;padding:14px">
+    <h3 style="margin:0 0 8px 0">Impostazioni</h3>
+    <div style="display:grid;gap:10px">
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="forceProxy" checked/> Forza uso proxy (consigliato)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="resetAfterSave" checked/> Reset automatico dopo salvataggio
+      </label>
+      <div>
+        <label>Endpoint Proxy</label>
+        <input id="proxyEndpoint" type="url" placeholder="https://.../?url=" />
+        <div class="muted">Default: https://qpwonscorepro.apesce-consulente.workers.dev/?url=</div>
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button value="cancel" class="btn-ghost">Chiudi</button>
+      <button id="saveSettings" class="btn-accent">Salva</button>
+    </div>
+  </form>
+</dialog>
 
-      const wa=/(wa\.me|api\.whatsapp|whatsapp)/.test(concat); score.whatsapp=wa?7:2; conf.whatsapp=wa?"high":"low"; evidence.whatsapp=wa?"Link/menzione WhatsApp":"Nessuna evidenza";
+<div id="toast" class="toast">Azione completata.</div>
 
-      const gr=/(nuova sede|apertura|stiamo assumendo|lavora con noi|apre|nuovo centro|nuovi macchinari|campagna|promozione)/.test(concat);
-      score.crescita=gr?8:3; conf.crescita=gr?"mid":"low"; evidence.crescita=gr?"Parole chiave di crescita":"Nessuna evidenza";
+<script>
+// ================== Helpers & State ==================
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const STORAGE = 'qpwon_scoring_v1_2';
+const DEFAULTS = {
+  proxyEndpoint: "https://qpwonscorepro.apesce-consulente.workers.dev/?url=",
+  forceProxy: true, resetAfterSave: true, leads: []
+};
+const S = { load(){ try{ return JSON.parse(localStorage.getItem(STORAGE))||{...DEFAULTS}; }catch{ return {...DEFAULTS}; } },
+            save(v){ localStorage.setItem(STORAGE, JSON.stringify(v)); } };
+let state = S.load();
+function toast(t){ const el=$("#toast"); el.textContent=t; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"), 2200); }
+function esc(s){ return (s||'').replace(/[&<>\"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function uuid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+function clamp(n,a,b){ return Math.min(b, Math.max(a,n)); }
 
-      if(md&&dl){ score.doppioSistema=9; conf.doppioSistema="high"; evidence.doppioSistema="MD+DL rilevati"; } else { score.doppioSistema=2; conf.doppioSistema="mid"; evidence.doppioSistema="Nessun doppio sistema chiaro"; }
+const AREAS = ['booking','telefonate','orari','whatsapp','crescita','doppioSistema','dimensione','serviziCall','decisionMaker','numeroDiretto','seoBase','advAttiva','social','reputazione'];
+const WEIGHTS = { booking:2, telefonate:2, crescita:2, doppioSistema:2, dimensione:2, orari:1, whatsapp:1, serviziCall:1, decisionMaker:1, numeroDiretto:1, seoBase:1, advAttiva:1, social:1, reputazione:1 };
 
-      const medRe=/(dott\.|dottore|dottoressa|dr\.|medico|specialista)/g; const hits=(concat.match(medRe)||[]).length;
-      score.dimensione = (hits>=3 && hits<=20)?9 : (hits>20 && hits<=40)?6 : (hits>40)?5 : 3; conf.dimensione="low"; evidence.dimensione="Occorrenze parole-medico: "+hits;
+// ================== Fetch via Proxy ==================
+async function edgeFetch(url){
+  const ep = (state.proxyEndpoint||DEFAULTS.proxyEndpoint).trim();
+  const r = await fetch(ep + encodeURIComponent(url), { credentials:"omit" });
+  if(!r.ok) throw new Error("Proxy HTTP "+r.status);
+  const data = await r.json();
+  if(!data || typeof data.html!=="string") throw new Error("Risposta proxy non valida");
+  return { html:data.html, status:data.status||200, contentType:data.contentType||"", url:data.url||url };
+}
 
-      const hiRe=/(prelievi|analisi|fisioterapia|oculistica|ecografia|radiologia|tac|risonanza)/; score.serviziCall=hiRe.test(concat)?7:3; conf.serviziCall=hiRe.test(concat)?"mid":"low"; evidence.serviziCall=hiRe.test(concat)?"Servizi ad alta chiamata presenti":"Nessuna evidenza";
-
-      const dmRe=/(direzione sanitaria|direttore sanitario|amministrazione|titolare|responsabile)/; score.decisionMaker=dmRe.test(concat)?7:3; conf.decisionMaker=dmRe.test(concat)?"mid":"low"; evidence.decisionMaker=dmRe.test(concat)?"Ruolo/contatto di direzione":"Nessuna evidenza";
-
-      const ph=/((\+?39\s?)?0?\d[\d\s\-\.]{6,})/; const hasPh=ph.test(concat); const pre=/(prenotazioni|segreteria|cup|centralino|accettazione)/;
-      score.numeroDiretto=hasPh?(pre.test(concat)?7:5):2; conf.numeroDiretto=hasPh?"mid":"low"; evidence.numeroDiretto=hasPh?"Telefono presente":"Nessuna evidenza";
-
-      const coverage = Math.round(100 * (Object.keys(score).length / AREAS.length));
-      return { score, conf, evidence, coverage };
+// ================== Text & Links ==================
+function extractText(html){
+  try{
+    const doc = new DOMParser().parseFromString(html,'text/html');
+    doc.querySelectorAll('script,style,noscript,svg').forEach(n=>n.remove());
+    return (doc.body?.innerText||'').replace(/\s+/g,' ').trim();
+  }catch(e){
+    return html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  }
+}
+function abs(base, href){ try{ return new URL(href, base).href; }catch{ return null; } }
+function pickLinks(base, html){
+  const doc = new DOMParser().parseFromString(html,'text/html');
+  const as = Array.from(doc.querySelectorAll('a[href],button,a[role="button"]'));
+  const wantHref = /(medici|equipe|staff|team|chi-siamo|servizi|prestazioni|contatti|prenota|booking|appuntamenti?|agenda|cup|prenotami)/i;
+  const wantText = /(prenota|appuntamenti?|agenda|cup|richiedi\s+appuntamento|booking)/i;
+  const out = [];
+  for(const el of as){
+    const href = el.getAttribute('href')||'';
+    const t = (el.textContent||'') + ' ' + (el.getAttribute('title')||'') + ' ' + (el.getAttribute('aria-label')||'');
+    if (wantHref.test(href) || wantText.test(t)){
+      const u = abs(base, href);
+      if(u && !out.includes(u)) out.push(u);
     }
+  }
+  return out.slice(0,5);
+}
 
-    function areaLabel(k){
-      return ({
-        booking:"Prenotazione online migliorabile/assente",
-        telefonate:"Traffico telefonico/attese",
-        orari:"Orari estesi/sabato (alto afflusso)",
-        whatsapp:"WhatsApp presente (rischio non presidiato)",
-        crescita:"Segnali di crescita (sede/assunzioni/adv)",
-        doppioSistema:"Doppio sistema MD+DL",
-        dimensione:"Taglia 3–20 medici (stimata)",
-        serviziCall:"Servizi ad alta chiamata presenti",
-        decisionMaker:"Decision maker identificabile",
-        numeroDiretto:"Numero diretto/centralino rilevato"
-      })[k] || k;
+// ================== JSON-LD & Contacts ==================
+function extractJsonLd(html){
+  const out=[];
+  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m; while((m = re.exec(html))){
+    const raw = m[1].trim();
+    try{
+      const parsed = JSON.parse(raw);
+      const arr = Array.isArray(parsed) ? parsed : (parsed['@graph']||[parsed]);
+      for(const it of arr) out.push(it);
+    }catch{}
+  }
+  return out.filter(n => /MedicalClinic|MedicalOrganization|LocalBusiness|Organization|Place/i.test(n['@type']||''));
+}
+function first(arr){ return Array.isArray(arr)&&arr.length?arr[0]:undefined; }
+function join(parts){ return parts.filter(Boolean).join(', '); }
+function contactFromNode(n){
+  const addr = n.address || {};
+  const cps = Array.isArray(n.contactPoint) ? n.contactPoint : (n.contactPoint ? [n.contactPoint] : []);
+  return {
+    name: n.name || n.legalName,
+    address: join([addr.streetAddress, addr.postOfficeBoxNumber]),
+    city: addr.addressLocality,
+    postalCode: addr.postalCode,
+    region: addr.addressRegion,
+    country: addr.addressCountry || "IT",
+    phone: n.telephone || first(cps.map(c=>c.telephone)),
+    email: n.email || first(cps.map(c=>c.email)),
+    confidence: {
+      name: n.name?"high":"mid",
+      address: addr.streetAddress?"high":"mid",
+      city: addr.addressLocality?"high":"mid",
+      phone: (n.telephone||first(cps.map(c=>c.telephone)))?"high":"mid",
+      email: (n.email||first(cps.map(c=>c.email)))?"high":"mid"
     }
-    function confBadge(c){
-      const map={low:"conf-low",mid:"conf-mid",high:"conf-high"};
-      return '<span class="badge '+(map[c]||"conf-low")+'">'+(c||"low")+'</span>';
+  };
+}
+const phoneRe = /((\+?39\s?)?0?\d[\d\s\-.]{6,})/i;
+const emailRe = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const addressRe = /\b(Via|Viale|Piazza|Corso|Largo|Strada|P\.le|P\.za)\s+[A-ZÀ-Ü][^,]{2,}\b.*?\d+\b/i;
+const capRe = /\b\d{5}\b/;
+function inferCity(text, address, cap){
+  const m = text.match(/\b([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*\(\s?[A-Z]{2}\s?\)/);
+  if (m) return m[1];
+  const fromAddr = address && address.split(',').map(s=>s.trim()).find(s => capRe.test(s) || /^[A-ZÀ-Ü]/.test(s));
+  if (fromAddr) return fromAddr.replace(capRe, '').trim();
+  return undefined;
+}
+function inferNameFromHtml(html){
+  const t = (html.match(/<title>([^<]{3,120})<\/title>/i)||[])[1];
+  const og = (html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i)||[])[1];
+  return og || t || "";
+}
+function extractContactsFromText(text){
+  const phone = (text.match(phoneRe)||[])[0];
+  const email = (text.match(emailRe)||[])[0];
+  const address = (text.match(addressRe)||[])[0];
+  const postal = (text.match(capRe)||[])[0];
+  const city = inferCity(text, address, postal);
+  return {
+    name: undefined,
+    address, city, postalCode: postal, phone, email,
+    confidence: {
+      name:"low", address: address?"mid":"low", city: city?"mid":"low",
+      phone: phone?"mid":"low", email: email?"mid":"low"
     }
-    function renderAreas(score, conf, evidence){
-      $("#areasBody").innerHTML = AREAS.map(a=>{
-        const s = (score[a]??0).toFixed(1);
-        const c = confBadge(conf[a]);
-        const ev = evidence[a] ? esc(evidence[a]) : "—";
-        return '<tr><td>'+areaLabel(a)+'</td><td>'+s+'</td><td>'+c+'</td><td>'+ev+'</td></tr>';
-      }).join("");
+  };
+}
+function hasAnyContact(c){ return (c.name||c.address||c.city||c.phone||c.email); }
+function dedupeLocations(locs){
+  const seen = new Set(); const out=[];
+  for(const l of locs){
+    const key = (l.name||'')+'|'+(l.address||'')+'|'+(l.city||'');
+    if(!seen.has(key)){ seen.add(key); out.push(l); }
+  }
+  return out;
+}
+function buildLocations(jsonLdNodes, pages, mainHtml){
+  const locs = [];
+  for(const n of jsonLdNodes){ const c=contactFromNode(n); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
+  // department/subOrganization
+  for(const n of jsonLdNodes){
+    const deps = [].concat(n.department||[], n.subOrganization||[]);
+    for(const d of deps){ const c=contactFromNode(d); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
+  }
+  if(!locs.length){
+    for(const p of pages){
+      const c = extractContactsFromText(p.text||"");
+      if(hasAnyContact(c)) locs.push({ ...c, url:p.url });
     }
-    function setGauge(val){
-      $("#scoreText").textContent = val.toFixed(1);
-      const t = (val>=8)?"hot":(val>=5)?"warm":"cold";
-      $("#dot").className = "dot "+t;
-      $("#tempText").textContent = (t==="hot"?"caldo":t==="warm"?"tiepido":"freddo");
-      const deg = -90 + (clamp(val,0,10)/10)*180;
-      $("#needle").style.transform = "rotate("+deg+"deg)";
-      const L=377, shown=L*(clamp(val,0,10)/10);
-      $("#arc").setAttribute("stroke-dasharray", shown+" "+(L-shown));
-    }
-    function overall(score){
-      let sum=0, ws=0, reasons=[];
-      for(const a of AREAS){ const s=score[a]??0, w=WEIGHTS[a]??1; sum+=s*w; ws+=10*w; if(s>=7) reasons.push([areaLabel(a), s]); }
-      reasons.sort((A,B)=>B[1]-A[1]);
-      return { final: Math.round((sum/ws)*100)/10, reasons: reasons.slice(0,3).map(r=>r[0]) };
-    }
-    function nextWorkingDay(d, add){
-      const x=new Date(d); x.setDate(x.getDate()+add);
-      const day=x.getDay(); if(day===6) x.setDate(x.getDate()+2); if(day===0) x.setDate(x.getDate()+1);
-      return x;
-    }
-    function fmt(d){ const g=['dom','lun','mar','mer','gio','ven','sab']; return g[d.getDay()]+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
-    function proposeSlots(){
-      const d1=nextWorkingDay(new Date(),1); d1.setHours(11,30,0,0);
-      const d2=nextWorkingDay(new Date(),2); d2.setHours(16,0,0,0);
-      return [fmt(d1), fmt(d2)];
-    }
-    function buildScript(name, reasons){
-      const slot=proposeSlots();
-      const why = (reasons && reasons.length) ? " In 15' ti mostro: " + reasons.join(" · ") + "." : "";
-      return "Ciao " + (name||"—") + ", seguo strutture come la tua per ridurre chiamate perse e aumentare appuntamenti integrando prenotazione online e gestione chiamate." + why + " Ti propongo " + slot[0] + " o " + slot[1] + " su Meet. Quale preferisci?";
-    }
+  }
+  if(!locs.length){
+    // fallback: try infer name from HTML <title>/og:site_name
+    const inferredName = inferNameFromHtml(mainHtml);
+    if (inferredName) locs.push({ name: inferredName, confidence:{name:"mid"} });
+  }
+  return dedupeLocations(locs);
+}
 
-    // ==================== FETCH HELPERS ====================
-    async function fetchDirect(url){
-      const res = await fetch(url, { credentials:"omit" });
-      if(!res.ok) throw new Error("HTTP "+res.status);
-      const html = await res.text();
-      return { html };
-    }
-    async function fetchViaProxy(url){
-      const endpoint = (state.proxyEndpoint || DEFAULT_ENDPOINT).trim();
-      if(!endpoint) throw new Error("Proxy non configurato");
-      const res = await fetch(endpoint + encodeURIComponent(url), { credentials:"omit" });
-      if(!res.ok) throw new Error("Proxy HTTP "+res.status);
-      const data = await res.json();
-      if(!data || !data.html) throw new Error("Risposta proxy non valida");
-      return { html: data.html };
-    }
-    function extractText(html){
-      try{
-        const doc = new DOMParser().parseFromString(html,"text/html");
-        doc.querySelectorAll("script,style,noscript,svg,nav,footer").forEach(n=>n.remove());
-        return (doc.body?.innerText||"").replace(/\s+/g," ").trim();
-      }catch(e){
-        return html.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
-      }
-    }
-    function abs(base, href){ try{ return new URL(href, base).href; }catch{ return null; } }
-    function pickLinks(base, html){
-      const doc = new DOMParser().parseFromString(html,"text/html");
-      const want = /(medici|equipe|staff|team|chi-siamo|servizi|prestazioni|contatti|prenota|booking)/i;
-      const links = Array.from(doc.querySelectorAll("a[href]")).map(a=>a.getAttribute("href")).filter(Boolean);
-      const out = []; for(const h of links){ if(want.test(h)){ const u = abs(base, h); if(u && !out.includes(u)) out.push(u); } }
-      return out.slice(0,3);
-    }
+// ================== Detection (14 aree) ==================
+const BOOKING_PROVIDERS_RE = /miodottore|docplanner|doctolib|cupsolidale|dottori\.it|prenotami\.cloud|calendly\.com|simplybook|setmore|acuityscheduling|youcanbook\.me/i;
+const BOOKING_KEYWORDS_RE = /(prenota(zione)?(\s*online)?|prenota\s*ora|book(ing)?|appuntamenti?|agenda|cup|prenotami|richiedi\s+(appuntamento|visita))/i;
+const PHONE_STRESS = /(linee? occupat[ae]|sempre occupato|attesa|richiama(re)?|chiamare per prenotare)/i;
+const SATURDAY = /\b(sab|sabato)\b/i;
+const H24 = /\b([01]?\d|2[0-3]):[0-5]\d\b/g;
+const WHATSAPP_RE = /(wa\.me|api\.whatsapp|whatsapp)/i;
+const GROWTH_RE = /(nuova sede|apertura|stiamo assumendo|lavora con noi|nuovo centro|nuovi macchinari|campagna|promozione)/i;
+const DOUBLESYS_RE = /(miodottore|docplanner).*(doctolib)|(doctolib).*(miodottore|docplanner)/i;
+const MEDIC_WORD_RE = /(dott\.|dottore|dottoressa|dr\.|medico|specialista)/gi;
+const HIGH_CALL_RE = /(radiologia|tac|risonanza|ecografia|fisioterapia|prelievi|analisi)/i;
+const DM_RE = /(direzione sanitaria|direttore sanitario|amministrazione|titolare|responsabile)/i;
+const DIRECT_NUM_HINT = /(prenotazioni|segreteria|cup|centralino|accettazione)/i;
+// Marketing
+const META_TITLE_RE = /<title>[^<]{10,}<\/title>/i;
+const META_DESC_RE  = /<meta[^>]*name=["']description["'][^>]*content=["'][^"']{40,}["']/i;
+const ADS_RE        = /(gtag\(|googletagmanager|googleads|fbq\(|facebook\.com\/tr|pixel\.facebook)/i;
+const SOCIAL_LINKS_RE = /(facebook\.com|instagram\.com|linkedin\.com)/i;
+const REVIEWS_RE      = /(recensioni|opinioni|valutazioni|google reviews|widget recensioni|trustpilot|miodottore)/i;
 
-    // ==================== ANALISI ====================
-    async function analyzeFromUrl(){
-      const urlInput = $("#url").value.trim();
-      if(!urlInput){ alert("Inserisci un URL."); return; }
-      setStatus("Lettura pagina principale…"); setProgress(10);
-      let base; try{ base = new URL(urlInput).origin; }catch{ alert("URL non valido"); return; }
-      const texts = [];
-      try{
-        let main;
-        if(state.forceProxy){ main = await fetchViaProxy(urlInput); }
-        else {
-          try{ main = await fetchDirect(urlInput); }
-          catch(e){ setStatus("CORS bloccato: passo al proxy…"); main = await fetchViaProxy(urlInput); }
-        }
-        const mainText = extractText(main.html);
-        texts.push({ url:urlInput, html:main.html, text:mainText });
+function detectAreas(pages){
+  const concat = pages.map(p => (p.text||'')).join(' ').toLowerCase();
+  const htmlAll = pages.map(p => p.html||'').join('\n');
 
-        setStatus("Estrazione link interni…"); setProgress(40);
-        const links = pickLinks(base, main.html);
+  function detectBooking(){
+    const providerHit = BOOKING_PROVIDERS_RE.test(concat);
+    const bookingWord = BOOKING_KEYWORDS_RE.test(concat);
+    if (providerHit) return { score:2, confidence:'high', evidence:'Provider/widget prenotazione rilevato' };
+    if (bookingWord) return { score:5, confidence:'mid', evidence:'Segnali di prenotazione (testo/link)' };
+    return { score:10, confidence:'mid', evidence:'Nessuna evidenza di prenotazione online' };
+  }
+  function detectTelefonate(hasBooking){
+    const stress = PHONE_STRESS.test(concat);
+    if (stress) return { score:8, confidence:'mid', evidence:'Testo con attese/telefono' };
+    return { score: hasBooking?3:7, confidence: hasBooking?'low':'low', evidence: hasBooking?'Booking presente':'Indizio indiretto' };
+  }
+  function detectOrari(){
+    const hasSat = SATURDAY.test(concat);
+    const times = concat.match(H24)||[];
+    const late = times.some(t=>{const [h,m]=t.split(':').map(Number); return h>19 || (h===19 && m>=30);});
+    return { score:(hasSat||late)?7:3, confidence:(hasSat||late)?'mid':'low', evidence:(hasSat?'sabato ':'')+(late?'orari ≥19:30':'') };
+  }
+  function detectWhatsApp(){ const wa=WHATSAPP_RE.test(concat); return { score: wa?7:2, confidence: wa?'high':'low', evidence: wa?'Link/menzione WhatsApp':'Nessuna evidenza' }; }
+  function detectCrescita(){ const hit=GROWTH_RE.test(concat); return { score: hit?8:3, confidence: hit?'mid':'low', evidence: hit?'Parole chiave di crescita':'Nessuna evidenza' }; }
+  function detectDoppio(){ const dbl=DOUBLESYS_RE.test(concat); return { score: dbl?9:2, confidence: dbl?'high':'mid', evidence: dbl?'MD+DL rilevati':'Nessun doppio sistema' }; }
+  function detectDimensione(){
+    const hits = (concat.match(MEDIC_WORD_RE)||[]).length;
+    const s = (hits>=3 && hits<=20)?9 : (hits>20 && hits<=40)?6 : (hits>40)?5 : 3;
+    return { score:s, confidence:'low', evidence:'Occorrenze parole-medico: '+hits };
+  }
+  function detectServizi(){ const hit=HIGH_CALL_RE.test(concat); return { score: hit?8:3, confidence: hit?'mid':'low', evidence: hit?'Servizi ad alta chiamata presenti':'Nessuna evidenza' }; }
+  function detectDM(){ const hit=DM_RE.test(concat); return { score: hit?7:3, confidence: hit?'mid':'low', evidence: hit?'Ruolo/contatto di direzione':'Nessuna evidenza' }; }
+  function detectNum(){ const hasPh=phoneRe.test(concat); const tag=DIRECT_NUM_HINT.test(concat); return { score: hasPh?(tag?7:5):2, confidence: hasPh?'mid':'low', evidence: hasPh?'Telefono presente':'Nessuna evidenza' }; }
 
-        setStatus("Lettura sottopagine…"); setProgress(60);
-        for(const l of links){
-          try{
-            let sub;
-            if(state.forceProxy){ sub = await fetchViaProxy(l); }
-            else { try{ sub = await fetchDirect(l); }catch{ sub = await fetchViaProxy(l); } }
-            texts.push({ url:l, html:sub.html, text:extractText(sub.html) });
-          }catch{ /* skip */ }
-        }
+  // Marketing
+  function detectSeo(){ const titleOK=META_TITLE_RE.test(htmlAll); const descOK=META_DESC_RE.test(htmlAll); const sc = (!titleOK || !descOK)?7:3; return { score:sc, confidence:'mid', evidence:(!titleOK?'title mancante ':'')+(!descOK?'meta description debole':'') }; }
+  function detectAdv(){ const hit=ADS_RE.test(htmlAll); return { score: hit?3:8, confidence:'mid', evidence: hit?'Pixel/ads rilevati':'Nessuna traccia di campagne' }; }
+  function detectSocial(){ const hit=SOCIAL_LINKS_RE.test(concat); return { score: hit?5:8, confidence:'low', evidence: hit?'Link social presenti':'Nessun link social' }; }
+  function detectReviews(){ const hit=REVIEWS_RE.test(concat); return { score: hit?4:7, confidence:'low', evidence: hit?'Sezione/widget recensioni':'Nessuna evidenza recensioni' }; }
 
-        setStatus("Valutazione aree…"); setProgress(80);
-        const { score, conf, evidence, coverage } = analyzeTexts(texts);
-        renderAreas(score, conf, evidence);
-        $("#coverage").textContent = "Copertura segnali: " + coverage + "%";
+  const booking = detectBooking();
+  const telefonate = detectTelefonate(booking.score<=5);
+  const orari = detectOrari();
+  const whatsapp = detectWhatsApp();
+  const crescita = detectCrescita();
+  const doppioSistema = detectDoppio();
+  const dimensione = detectDimensione();
+  const serviziCall = detectServizi();
+  const decisionMaker = detectDM();
+  const numeroDiretto = detectNum();
 
-        const { final, reasons } = overall(score);
-        setGauge(final);
-        $("#script").value = buildScript($("#name").value, reasons);
-        window.__lastAnalysis = { final, reasons };
-        setStatus("Fatto."); setProgress(100);
-      }catch(err){
-        console.error(err);
-        setStatus("Impossibile leggere il sito. Controlla il proxy in Impostazioni.");
-        setProgress(0);
-      }
-    }
+  const seoBase = detectSeo();
+  const advAttiva = detectAdv();
+  const social = detectSocial();
+  const reputazione = detectReviews();
 
-    async function analyzeFromPasted(){
-      const t = $("#pasted").value.trim(); if(!t){ alert("Incolla del testo"); return; }
-      setStatus("Analisi del testo incollato…"); setProgress(60);
-      const { score, conf, evidence, coverage } = analyzeTexts([{url:"pasted://", html:"", text:t}]);
-      renderAreas(score, conf, evidence);
-      $("#coverage").textContent = "Copertura segnali: " + coverage + "%";
-      const { final, reasons } = overall(score);
-      setGauge(final);
-      $("#script").value = buildScript($("#name").value, reasons);
-      window.__lastAnalysis = { final, reasons };
-      setStatus("Fatto."); setProgress(100);
-    }
+  return {
+    areas: { booking, telefonate, orari, whatsapp, crescita, doppioSistema, dimensione, serviziCall, decisionMaker, numeroDiretto, seoBase, advAttiva, social, reputazione }
+  };
+}
 
-    // ==================== CODA & AZIONI ====================
-    function temperature(v){ return (v>=8)?"hot":(v>=5)?"warm":"cold"; }
-    function renderQueue(){
-      const term = $("#search").value?.toLowerCase()||"";
-      const rows = (state.leads||[]).slice().sort((a,b)=> b.score - a.score || a.createdAt - b.createdAt)
-        .filter(l => !term || l.name.toLowerCase().includes(term) || (l.city||"").toLowerCase().includes(term))
-        .map(l => `
-        <tr data-id="${l.id}">
-          <td><span class="dot ${l.temp||'cold'}"></span></td>
-          <td>${esc(l.name)}</td>
-          <td>${esc(l.city||'')}</td>
-          <td>${l.score.toFixed(1)}</td>
-          <td class="actions">
-            <button data-act="wa">WA</button>
-            <button data-act="call">Chiama</button>
-            <button data-act="mail" class="btn-ghost">Email</button>
-            <button data-act="del" class="btn-danger">Elimina</button>
-          </td>
-        </tr>`).join("");
-      $("#queueBody").innerHTML = rows || `<tr><td colspan="5" class="muted">Nessun lead salvato.</td></tr>`;
-      // Bind actions
-      $$("#queueBody [data-act]").forEach(btn => btn.addEventListener("click", onLeadAction));
-    }
-    function onLeadAction(e){
-      const tr = e.target.closest("tr"); const id = tr.getAttribute("data-id");
-      const lead = (state.leads||[]).find(x=>x.id===id); if(!lead) return;
-      const act = e.target.getAttribute("data-act");
-      if(act==="del"){
-        state.leads = (state.leads||[]).filter(x=>x.id!==id); S.save(state); renderQueue(); return;
-      }
-      if(act==="call"){
-        if(!lead.phone){ alert("Telefono mancante su questo lead."); return; }
-        window.location.href = "tel:"+lead.phone.replace(/\s+/g,"");
-        return;
-      }
-      const text = lead.script || buildScript(lead.name, lead.reasons||[]);
-      if(act==="wa"){
-        const phone = (lead.phone||"").replace(/[^\d]/g,"");
-        if(!phone){ alert("Telefono mancante per WhatsApp."); return; }
-        const u = "https://wa.me/"+phone+"?text="+encodeURIComponent(text);
-        window.open(u, "_blank");
-      } else if(act==="mail"){
-        const subject = "Proposta breve per " + (lead.name||"la vostra struttura");
-        const u = "mailto:?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(text);
-        window.location.href = u;
-      }
-    }
-    function addToQueue(){
-      const la = window.__lastAnalysis||{final:0,reasons:[]};
-      const lead = {
-        id: uuid(),
-        name: $("#name").value.trim()||"—",
-        city: $("#city").value.trim(),
-        phone: $("#phone").value.trim(),
-        url: $("#url").value.trim(),
-        score: la.final,
-        temp: temperature(la.final),
-        reasons: la.reasons,
-        script: $("#script").value.trim(),
-        createdAt: Date.now()
-      };
-      state.leads = state.leads||[]; state.leads.push(lead); S.save(state); renderQueue();
-      alert("Aggiunto in coda.");
-    }
+// ================== Scoring, Top5, Script, Pitch ==================
+function scoreAll(areas){
+  let sum=0, denom=0, covered=0;
+  for(const [k,a] of Object.entries(areas)){
+    const w = WEIGHTS[k]||1;
+    const s = clamp(a.score,0,10);
+    sum += s*w; denom += 10*w;
+    if (a.evidence || a.confidence!=='low') covered++;
+  }
+  const final = Math.round((sum/denom)*100)/10;
+  const coverage = Math.round(100*covered/Object.keys(areas).length);
+  const temperature = final>=8?'hot':final>=5?'warm':'cold';
+  return { final, coverage, temperature };
+}
+function areaLabel(k){
+  return ({
+    booking:'Prenotazione online migliorabile/assente',
+    telefonate:'Traffico telefonico/attese',
+    orari:'Orari estesi/sabato (alto afflusso)',
+    whatsapp:'WhatsApp presente (rischio non presidiato)',
+    crescita:'Segnali di crescita (sede/assunzioni/adv)',
+    doppioSistema:'Doppio sistema MD+DL',
+    dimensione:'Taglia 3–20 medici (stimata)',
+    serviziCall:'Servizi ad alta chiamata presenti',
+    decisionMaker:'Decision maker identificabile',
+    numeroDiretto:'Numero diretto/centralino rilevato',
+    seoBase:'SEO base migliorabile',
+    advAttiva:'Campagne/Pixel ads',
+    social:'Social media',
+    reputazione:'Reputazione/Recensioni'
+  })[k] || k;
+}
+function confBadge(c){ const map={low:'conf-low',mid:'conf-mid',high:'conf-high'}; return '<span class="badge '+(map[c]||'conf-low')+'">'+(c||'low')+'</span>'; }
+function renderAreas(areas){
+  $('#areasBody').innerHTML = AREAS.map(a=>{
+    const it = areas[a]; const s = (it?.score??0).toFixed(1); const c = confBadge(it?.confidence||'low'); const e = esc(it?.evidence||'—');
+    return '<tr><td>'+areaLabel(a)+'</td><td>'+s+'</td><td>'+c+'</td><td>'+e+'</td></tr>';
+  }).join('');
+}
+function topWeaknesses(areas, n=5){
+  const arr = Object.entries(areas).map(([k,a])=>({key:k,label:areaLabel(k),score:a.score||0,evidence:a.evidence||''}))
+    .sort((A,B)=>B.score-A.score||A.label.localeCompare(B.label));
+  return arr.slice(0,n);
+}
+function renderTop5(t5){
+  const colors = ['#ff6b6b','#ff9f43','#f1c40f','#4aa3ff','#2ecc71'];
+  $('#top5').innerHTML = t5.map((x,i)=>'<div class="chip" title="'+esc(x.evidence)+'" style="border-color:'+colors[i]+';box-shadow:0 0 0 1px '+colors[i]+' inset"><strong>'+(i+1)+'. '+esc(x.label)+'</strong> ('+x.score.toFixed(1)+')</div>').join('');
+}
+function setGauge(v){
+  $('#scoreText').textContent = v.toFixed(1);
+  const t = v>=8?'hot':v>=5?'warm':'cold';
+  $('#dot').className = 'dot '+t; $('#tempText').textContent = (t==='hot'?'caldo':t==='warm'?'tiepido':'freddo');
+  const L=377, shown=L*(Math.min(10,Math.max(0,v))/10);
+  $('#arc').setAttribute('stroke-dasharray', shown+' '+(L-shown));
+  const deg = -90 + (Math.min(10,Math.max(0,v))/10)*180;
+  $('#needle').style.transform = 'rotate('+deg+'deg)';
+}
+function proposeSlots(){
+  const day = ["dom","lun","mar","mer","gio","ven","sab"];
+  const d1=new Date(); d1.setDate(d1.getDate()+1); d1.setHours(11,30,0,0);
+  const d2=new Date(); d2.setDate(d2.getDate()+2); d2.setHours(16,0,0,0);
+  const f = d=>day[d.getDay()]+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  return [f(d1), f(d2)];
+}
+function buildScript(name, reasons){
+  const [a,b] = proposeSlots();
+  const why = reasons?.length ? " In 15' ti mostro: " + reasons.join(' · ') + "." : "";
+  return "Ciao " + (name||'—') + ", seguo strutture come la tua per ridurre chiamate perse e aumentare appuntamenti integrando prenotazione online e gestione chiamate." + why + " Ti propongo " + a + " o " + b + " su Meet. Quale preferisci?";
+}
+function buildPitchMail(contact, reasons){
+  const ogg = "Ridurre le chiamate perse e semplificare le prenotazioni " + (contact.city?("a "+contact.city+" – "):"") + (contact.name||"alla vostra struttura");
+  const r = (reasons||[]).slice(0,3);
+  const body = "Buongiorno,\n\n" +
+"analizzando la vostra presenza online ho notato alcuni aspetti che impattano sull’organizzazione " + (contact.name?("di "+contact.name):"della struttura") + (contact.city?(" a "+contact.city):"") + ":\n" +
+"- " + (r[0]||"—") + "\n" +
+"- " + (r[1]||"—") + "\n" +
+"- " + (r[2]||"—") + "\n\n" +
+"Questi elementi sono comuni a molte strutture sanitarie che seguiamo: spesso significano pazienti persi, tempi di attesa lunghi e segreteria sovraccarica.\n\n" +
+"In pochi minuti posso mostrarvi come strutture simili hanno risolto queste criticità, riducendo le chiamate perse e aumentando la soddisfazione dei pazienti.\n\n" +
+"Le propongo due slot per un confronto veloce su Meet:\n" +
+"- " + proposeSlots()[0] + "\n" +
+"- " + proposeSlots()[1] + "\n\n" +
+"Quale preferisce?\n\n" +
+"Cordiali saluti,\nAlfonso Pesce";
+  return { subject: ogg, body };
+}
 
-    // ==================== EXPORT / IMPORT ====================
-    function exportJSON(){
-      const blob=new Blob([JSON.stringify({leads:state.leads||[]},null,2)],{type:"application/json"});
-      const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="qpwon_scoring_export.json"; a.click(); URL.revokeObjectURL(url);
-    }
-    function exportCSV(){
-      const cols=["nome","città","url","telefono","score","temperatura","motivi"];
-      const rows=(state.leads||[]).map(l=>[wrap(l.name),wrap(l.city||""),wrap(l.url||""),wrap(l.phone||""),l.score.toFixed(1),l.temp,wrap((l.reasons||[]).join(" | "))].join(","));
-      const csv=[cols.join(","),...rows].join("\n"); const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-      const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="qpwon_scoring_export.csv"; a.click(); URL.revokeObjectURL(url);
-      function wrap(s){ s=(s||"").toString().replaceAll('"','""'); return '"'+s+'"'; }
-    }
-    function onImportJSON(e){
-      const f=e.target.files[0]; if(!f) return;
-      f.text().then(t=>{
+// ================== Provenance ==================
+function renderProvenance(pages){
+  $('#prov').innerHTML = pages.map(p => '<div class="box"><div class="muted">'+esc(p.role||'page')+'</div><div style="font-size:13px">'+esc(p.url||'')+'</div><div class="muted" style="font-size:12px">'+(p.text?.length||0)+' chars</div></div>').join('');
+}
+
+// ================== Reset UI ==================
+function resetAnalysisUI(){
+  $("#url").value = "";
+  $("#name").value = ""; $("#city").value=""; $("#phone").value=""; $("#email").value=""; $("#address").value="";
+  $("#script").value = ""; $("#mailSubj").value=""; $("#mailBody").value=""; $("#pasted").value="";
+  $("#areasBody").innerHTML = ""; $("#coverage").textContent="Copertura segnali: 0%"; $("#top5").innerHTML="";
+  $("#sedeLabel").textContent = "—"; $("#locSelect").innerHTML = "";
+  setGauge(0); setProgress(0); setStatus("Pronto.");
+  window.__locations=[]; window.__locIndex=-1; window.__lastLead=null;
+  $("#url").focus();
+}
+
+// ================== UI helpers ==================
+function setStatus(t){ $('#status').textContent = t; }
+function setProgress(p){ $('#pbar').style.width = p+'%'; }
+function setConfs(c){
+  const map = {low:'conf-low',mid:'conf-mid',high:'conf-high'};
+  $("#confName").className = "badge "+(map[c?.name||'low']||'conf-low'); $("#confName").textContent = "name: "+(c?.name||'low');
+  $("#confCity").className = "badge "+(map[c?.city||'low']||'conf-low'); $("#confCity").textContent = "city: "+(c?.city||'low');
+  $("#confPhone").className = "badge "+(map[c?.phone||'low']||'conf-low'); $("#confPhone").textContent = "phone: "+(c?.phone||'low');
+  $("#confEmail").className = "badge "+(map[c?.email||'low']||'conf-low'); $("#confEmail").textContent = "email: "+(c?.email||'low');
+  $("#confAddress").className = "badge "+(map[c?.address||'low']||'conf-low'); $("#confAddress").textContent = "address: "+(c?.address||'low');
+}
+function renderContact(loc){
+  $("#name").value = loc.name||""; $("#city").value=loc.city||""; $("#phone").value=loc.phone||""; $("#email").value=loc.email||""; $("#address").value=loc.address||"";
+  setConfs(loc.confidence||{});
+}
+function updateLocLabel(){
+  const n = (window.__locations||[]).length, i = (window.__locIndex??-1);
+  $("#sedeLabel").textContent = n? ("Sede "+(i+1)+"/"+n) : "—";
+}
+function bindLocSelector(){
+  const sel = $("#locSelect"); sel.innerHTML = (window.__locations||[]).map((l,i)=>'<option value="'+i+'">'+esc((l.city? (l.city+" · "):"") + (l.address||l.name||("Sede "+(i+1))))+'</option>').join('');
+  sel.onchange = ()=>{ window.__locIndex = parseInt(sel.value||"0"); renderContact(window.__locations[window.__locIndex]||{}); refreshComms(); updateLocLabel(); };
+}
+function refreshComms(){
+  const reasons = (window.__lastLead?.summary?.topReasons)||[];
+  const nm = $("#name").value || (window.__locations?.[window.__locIndex||0]?.name)||"—";
+  $("#script").value = buildScript(nm, reasons);
+  const pitch = buildPitchMail({ name: $("#name").value, city: $("#city").value }, reasons);
+  $("#mailSubj").value = pitch.subject; $("#mailBody").value = pitch.body;
+}
+
+// ================== Analyze flow ==================
+async function analyze(){
+  const url = $('#url').value.trim();
+  const pasted = $('#pasted').value.trim();
+  if (!url && !pasted){ alert('Inserisci un URL o incolla testo'); return; }
+  setStatus('Lettura pagina…'); setProgress(10);
+
+  let pages = [];
+  try{
+    if (pasted){
+      pages.push({ url:"pasted://", role:"main", html:"", text:pasted });
+    } else {
+      const main = await edgeFetch(url);
+      const base = new URL(url).origin;
+      const mainText = extractText(main.html);
+      pages.push({ url, role:"main", html: main.html, text: mainText });
+
+      setStatus('Estrazione link interni…'); setProgress(35);
+      const links = pickLinks(base, main.html);
+
+      setStatus('Lettura sottopagine…'); setProgress(55);
+      for (const l of links){
         try{
-          const data=JSON.parse(t);
-          if(data && Array.isArray(data.leads)){ state.leads=data.leads; S.save(state); renderQueue(); alert("Import completato."); }
-          else alert("File non valido.");
-        }catch(err){ alert("Errore import: "+err.message); }
-      }).finally(()=>{ e.target.value=""; });
-    }
-
-    // ==================== IMPOSTAZIONI & TEST PROXY ====================
-    function openSettings(){
-      $("#proxyEndpoint").value = state.proxyEndpoint || DEFAULT_ENDPOINT;
-      $("#forceProxy").checked = !!state.forceProxy;
-      $("#defaultEP").textContent = DEFAULT_ENDPOINT;
-      $("#dlg").showModal();
-    }
-    function saveSettings(e){
-      e.preventDefault();
-      state.proxyEndpoint = $("#proxyEndpoint").value.trim() || DEFAULT_ENDPOINT;
-      state.forceProxy = $("#forceProxy").checked;
-      S.save(state);
-      $("#dlg").close();
-      alert("Impostazioni salvate.");
-    }
-    async function testProxy(){
-      const ep = (state.proxyEndpoint||DEFAULT_ENDPOINT).trim();
-      if(!ep){ alert("Configura prima l'endpoint del proxy."); return; }
-      setStatus("Test proxy…");
-      try{
-        const res = await fetch(ep + encodeURIComponent("https://www.example.com"), { credentials:"omit" });
-        if(!res.ok) throw new Error("HTTP "+res.status);
-        const j = await res.json();
-        if(j && j.html) { setStatus("Proxy OK ✔"); alert("Proxy OK: risposta valida ricevuta."); }
-        else throw new Error("Formato non valido");
-      }catch(err){ setStatus("Proxy KO ✖"); alert("Proxy KO: "+err.message); }
-    }
-
-    // ==================== BINDINGS ====================
-    $("#analyze").addEventListener("click", analyzeFromUrl);
-    $("#analyzePasted").addEventListener("click", analyzeFromPasted);
-
-    $("#saveQueue").addEventListener("click", addToQueue);
-    $("#search").addEventListener("input", renderQueue);
-
-    $("#exportJSON").addEventListener("click", exportJSON);
-    $("#exportCSV").addEventListener("click", exportCSV);
-    $("#importJSON").addEventListener("change", onImportJSON);
-
-    $("#btnSettings").addEventListener("click", openSettings);
-    $("#saveSettings").addEventListener("click", saveSettings);
-    $("#btnTestProxy").addEventListener("click", testProxy);
-
-    $("#resetAll").addEventListener("click", ()=>{
-      if(confirm("Eliminare tutti i lead e ripristinare le impostazioni?")){
-        state = {...DEFAULT_STATE}; S.save(state); renderQueue(); setGauge(0); setStatus("Pronto."); setProgress(0);
+          const sub = await edgeFetch(l);
+          pages.push({ url:l, role:"other", html: sub.html, text: extractText(sub.html) });
+        }catch{}
       }
-    });
+    }
 
-    $("#btnWA").addEventListener("click", ()=>{
-      const phone = ($("#phone").value||"").replace(/[^\d]/g,"");
-      if(!phone){ alert("Inserisci il numero di telefono."); return; }
-      const text = $("#script").value || buildScript($("#name").value, (window.__lastAnalysis?.reasons)||[]);
-      const url = "https://wa.me/"+phone+"?text="+encodeURIComponent(text);
-      window.open(url,"_blank");
-    });
-    $("#btnCall").addEventListener("click", ()=>{
-      const phone = ($("#phone").value||"").trim();
-      if(!phone){ alert("Inserisci il numero di telefono."); return; }
-      window.location.href = "tel:"+phone.replace(/\s+/g,"");
-    });
-    $("#btnEmail").addEventListener("click", ()=>{
-      const subject = "Proposta breve per " + ($("#name").value||"la vostra struttura");
-      const body = $("#script").value || buildScript($("#name").value, (window.__lastAnalysis?.reasons)||[]);
-      const url = "mailto:?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
-      window.location.href = url;
-    });
+    setStatus('Parsing JSON-LD & contatti…'); setProgress(70);
+    const jsonLd = pages.flatMap(p => extractJsonLd(p.html||""));
+    const locations = buildLocations(jsonLd, pages, pages[0]?.html||"");
+    window.__locations = locations; window.__locIndex = locations.length?0:-1;
+    bindLocSelector(); updateLocLabel(); renderContact(locations[0]||{});
 
-    // ==================== INIT ====================
-    renderQueue(); setGauge(0); setStatus("Pronto."); setProgress(0);
-  </script>
+    setStatus('Valutazione aree…'); setProgress(82);
+    const det = detectAreas(pages);
+    renderAreas(det.areas);
+
+    const sc = scoreAll(det.areas);
+    setGauge(sc.final);
+    $('#coverage').textContent = 'Copertura segnali: '+sc.coverage+'%';
+    const t5 = topWeaknesses(det.areas, 5); renderTop5(t5);
+    renderProvenance(pages);
+
+    const reasons = t5.slice(0,3).map(x=>x.label);
+    const nm = $("#name").value || locations[0]?.name || inferNameFromHtml(pages[0]?.html||"");
+    $("#script").value = buildScript(nm, reasons);
+    const pitch = buildPitchMail({ name: nm || $("#name").value, city: $("#city").value }, reasons);
+    $("#mailSubj").value = pitch.subject; $("#mailBody").value = pitch.body;
+
+    window.__lastLead = {
+      analysis:{ areas:det.areas, coverage: sc.coverage, finalScore: sc.final, temperature: sc.temperature, topReasons: reasons },
+      summary:{ score: sc.final, temperature: sc.temperature, topReasons: reasons, script: $("#script").value, pitchMail: pitch },
+      provenance:{ pagesRead: pages.map(p=>({url:p.url, role:p.role, chars:(p.text||'').length})) }
+    };
+
+    setStatus('Fatto.'); setProgress(100);
+  }catch(e){
+    console.error(e); setStatus('Errore: '+e.message); setProgress(0);
+  }
+}
+
+// ================== Queue & Export ==================
+function temperature(v){ return v>=8?'hot':v>=5?'warm':'cold'; }
+function renderQueue(){
+  const term = $('#search')?.value?.toLowerCase()||'';
+  const leads = (S.load().leads||[]).slice()
+    .sort((a,b)=>b.score-a.score||a.createdAt-b.createdAt)
+    .filter(l => !term || l.name.toLowerCase().includes(term) || (l.city||'').toLowerCase().includes(term));
+  $('#queueBody').innerHTML = leads.map(l =>
+    '<tr><td><span class="dot '+(l.temp||'cold')+'"></span></td><td>'+esc(l.name)+'</td><td>'+esc(l.city||'')+'</td><td>'+l.score.toFixed(1)+'</td><td>'+
+    '<button class="btn-ghost" onclick="openWA(\''+esc(l.phone||'')+'\')">WA</button> '+
+    '<button class="btn-ghost" onclick="alert(\'Chiama: '+esc(l.phone||'')+'\')">Chiama</button> '+
+    '<button class="btn-ghost" onclick="mailtoLead(\''+esc(l.email||'')+'\', \''+esc(l.name||'')+'\')">Email</button>'+
+    '</td></tr>'
+  ).join('') || '<tr><td colspan="5" class="muted">Nessun lead salvato.</td></tr>';
+}
+function addLead(){
+  const la = window.__lastLead || { summary:{score:0, topReasons:[], script:""}, analysis:{}, provenance:{} };
+  const loc = window.__locations?.[window.__locIndex||0] || {};
+  const s = S.load(); s.leads = s.leads || [];
+  s.leads.push({
+    id: uuid(),
+    name: $('#name').value.trim() || (loc.name||'—'),
+    city: $('#city').value.trim() || (loc.city||''),
+    address: $('#address').value.trim() || (loc.address||''),
+    phone: $('#phone').value.trim() || (loc.phone||''),
+    email: $('#email').value.trim() || (loc.email||''),
+    url: $('#url').value.trim(),
+    score: la.summary.score||0, temp: temperature(la.summary.score||0),
+    reasons: la.summary.topReasons||[], script: $('#script').value.trim(),
+    pitch: { subject: $('#mailSubj').value, body: $('#mailBody').value },
+    createdAt: Date.now()
+  });
+  S.save(s); renderQueue();
+  if (S.load().resetAfterSave!==false){ resetAnalysisUI(); }
+  toast('Aggiunto in coda. Analisi resettata.');
+}
+function exportJSON(){
+  const s=S.load(); const blob=new Blob([JSON.stringify({leads:s.leads||[]},null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='qpwon_export.json'; a.click(); URL.revokeObjectURL(u);
+}
+function exportCSV(){
+  const s=S.load(); const cols=['nome','città','indirizzo','telefono','email','url','score','temperatura','motivi'];
+  const rows=(s.leads||[]).map(l=>[wrap(l.name),wrap(l.city||''),wrap(l.address||''),wrap(l.phone||''),wrap(l.email||''),wrap(l.url||''),l.score.toFixed(1),l.temp,wrap((l.reasons||[]).join(' | '))].join(','));
+  const csv=[cols.join(','),...rows].join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='qpwon_export.csv'; a.click(); URL.revokeObjectURL(u);
+  function wrap(s){ s=(s||'').toString().replaceAll('"','""'); return '"'+s+'"'; }
+}
+function openWA(phone){
+  const p = (phone||$('#phone').value||'').replace(/\D+/g,'');
+  if(!p){ alert('Numero WhatsApp non disponibile'); return; }
+  const text = encodeURIComponent($('#script').value||'');
+  window.open('https://wa.me/'+p+'?text='+text,'_blank');
+}
+function mailtoLead(email, name){
+  const e = email || $('#email').value || '';
+  if(!e){ alert('Email non disponibile'); return; }
+  const subj = encodeURIComponent($('#mailSubj').value||('Per '+(name||$('#name').value||'')));
+  const body = encodeURIComponent($('#mailBody').value||'');
+  window.location.href = 'mailto:'+e+'?subject='+subj+'&body='+body;
+}
+function copyContacts(){
+  const txt = [
+    $('#name').value, $('#address').value, $('#city').value,
+    'Tel: '+($('#phone').value||'—'),
+    'Email: '+($('#email').value||'—')
+  ].filter(Boolean).join('\n');
+  navigator.clipboard.writeText(txt).then(()=>toast('Contatti copiati'));
+}
+
+// ================== Bindings ==================
+$('#analyze').addEventListener('click', analyze);
+$('#saveLead').addEventListener('click', addLead);
+$('#exportJSON').addEventListener('click', exportJSON);
+$('#exportCSV').addEventListener('click', exportCSV);
+$('#resetAll').addEventListener('click', ()=>{ if(confirm('Reset impostazioni + coda?')){ localStorage.removeItem(STORAGE); state=S.load(); renderQueue(); resetAnalysisUI(); toast('Reset eseguito.'); } });
+$('#btnSettings').addEventListener('click', ()=>{
+  $('#proxyEndpoint').value = (S.load().proxyEndpoint||DEFAULTS.proxyEndpoint);
+  $('#forceProxy').checked = !!S.load().forceProxy;
+  $('#resetAfterSave').checked = S.load().resetAfterSave!==false;
+  $('#dlg').showModal();
+});
+$('#saveSettings').addEventListener('click', (e)=>{
+  e.preventDefault();
+  const s = S.load();
+  s.proxyEndpoint = $('#proxyEndpoint').value.trim()||DEFAULTS.proxyEndpoint;
+  s.forceProxy = $('#forceProxy').checked;
+  s.resetAfterSave = $('#resetAfterSave').checked;
+  S.save(s);
+  $('#dlg').close();
+  toast('Impostazioni salvate.');
+});
+$('#tabScript').addEventListener('click', ()=>{ $('#tabScript').className='btn-accent'; $('#tabPitch').className='btn-ghost'; $('#scriptWrap').style.display='flex'; $('#pitchWrap').style.display='none'; });
+$('#tabPitch').addEventListener('click', ()=>{ $('#tabPitch').className='btn-accent'; $('#tabScript').className='btn-ghost'; $('#scriptWrap').style.display='none'; $('#pitchWrap').style.display='flex'; });
+$('#btnCopyContacts').addEventListener('click', copyContacts);
+$('#btnOpenWA').addEventListener('click', ()=>openWA($('#phone').value));
+$('#btnMailto').addEventListener('click', ()=>mailtoLead($('#email').value,$('#name').value));
+$('#search').addEventListener('input', renderQueue);
+
+// Init
+renderQueue(); setGauge(0); setStatus('Pronto.');
+</script>
 </body>
 </html>
+
 
