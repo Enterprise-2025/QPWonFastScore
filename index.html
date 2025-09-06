@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>QPWON · Scoring Sprint (v1.2)</title>
-  <meta name="description" content="Analizza un sito di poliambulatorio e genera una scheda lead completa: score, top 5 punti deboli, contatti auto-compilati, script e pitch mail. Nessuna dipendenza." />
+  <title>QPWON · Scoring Sprint (v1.3)</title>
+  <meta name="description" content="Analizza un sito di poliambulatorio e genera una scheda lead completa: score, top 5 punti deboli, contatti auto-compilati (enhanced), script e pitch mail. Nessuna dipendenza." />
   <style>
     :root{
       --bg:#0f1220; --bg2:#121735; --card:#1b2140; --surface:#161c39; --line:#283060;
@@ -69,7 +69,7 @@
 <header>
   <div class="topbar">
     <div class="brand">QPWON · <span class="muted">Scoring Sprint</span></div>
-    <span class="pill">v1.2 · no deps</span>
+    <span class="pill">v1.3 · no deps</span>
     <div class="spacer"></div>
     <button id="btnSettings" class="btn-ghost">Impostazioni</button>
     <button id="exportJSON" class="btn-ghost">Export JSON</button>
@@ -250,7 +250,7 @@
 // ================== Helpers & State ==================
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const STORAGE = 'qpwon_scoring_v1_2';
+const STORAGE = 'qpwon_scoring_v1_3';
 const DEFAULTS = {
   proxyEndpoint: "https://qpwonscorepro.apesce-consulente.workers.dev/?url=",
   forceProxy: true, resetAfterSave: true, leads: []
@@ -290,8 +290,8 @@ function abs(base, href){ try{ return new URL(href, base).href; }catch{ return n
 function pickLinks(base, html){
   const doc = new DOMParser().parseFromString(html,'text/html');
   const as = Array.from(doc.querySelectorAll('a[href],button,a[role="button"]'));
-  const wantHref = /(medici|equipe|staff|team|chi-siamo|servizi|prestazioni|contatti|prenota|booking|appuntamenti?|agenda|cup|prenotami)/i;
-  const wantText = /(prenota|appuntamenti?|agenda|cup|richiedi\s+appuntamento|booking)/i;
+  const wantHref = /(medici|equipe|staff|team|chi-siamo|servizi|prestazioni|contatti|prenota|booking|appuntamenti?|agenda|cup|prenotami|sedi)/i;
+  const wantText = /(prenota|appuntamenti?|agenda|cup|richiedi\s+appuntamento|booking|sedi)/i;
   const out = [];
   for(const el of as){
     const href = el.getAttribute('href')||'';
@@ -304,25 +304,46 @@ function pickLinks(base, html){
   return out.slice(0,5);
 }
 
-// ================== JSON-LD & Contacts ==================
+// ================== JSON-LD & Contacts (enhanced) ==================
+const PHONE_RE   = /((\+?39\s?)?0?\d[\d\s\-.]{6,})/g;
+const EMAIL_RE   = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const CAP_RE     = /\b\d{5}\b/;
+const PROV_RE    = /\(([A-Z]{2})\)/;
+const ADDR_RE    = /\b(Via|Viale|Piazza|P\.za|Corso|Largo|Strada|Str\.)\s+[A-ZÀ-Ü][^,]{1,80}?\s+\d+[A-Z]?(\s?\/\s?[A-Z0-9]+)?/i;
+const TOPONYM_RE = /\b(Via|Viale|Piazza|P\.za|Corso|Largo|Strada|Str\.)\b/i;
+const CITY_HINTS = /\b(Sede|Ambulatorio|Centro|Poliambulatorio|Laboratorio|Punto\s+prelievi)\b/i;
+const CONTACT_HINTS = /\b(Contatti|Segreteria|Prenotazioni|CUP|Accettazione|Reception)\b/i;
+
+const EMAIL_PRIORITY = ['prenotazioni','segreteria','cup','accettazione','booking','reception','frontoffice','amministrazione','direzione','contatti','info'];
+
+function getSiteDomain(fromUrl){ try{ return new URL(fromUrl||'').hostname.replace(/^www\./,''); }catch{ return ''; } }
+function emailScore(email, siteDomain){
+  const [local, domain] = String(email).toLowerCase().split('@'); let s = 0;
+  for (let i=0;i<EMAIL_PRIORITY.length;i++){ if (local?.includes(EMAIL_PRIORITY[i])) { s += (EMAIL_PRIORITY.length-i); break; } }
+  if (siteDomain && domain && domain.endsWith(siteDomain)) s += 5;
+  if (/gmail\.com|yahoo\.|hotmail\.|libero\.it|outlook\.com/.test(domain)) s -= 2;
+  return s;
+}
+function normalizePhone(ph){ return String(ph||'').replace(/[^\d+]/g,'').replace(/^(\+)?39?0?/, (m,plus)=> plus?'+39':''); }
+function around(node, maxChars=280){ const txt=(node?.textContent||'').replace(/\s+/g,' ').trim(); return txt.slice(0,maxChars); }
+
 function extractJsonLd(html){
-  const out=[];
-  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let m; while((m = re.exec(html))){
-    const raw = m[1].trim();
-    try{
-      const parsed = JSON.parse(raw);
-      const arr = Array.isArray(parsed) ? parsed : (parsed['@graph']||[parsed]);
-      for(const it of arr) out.push(it);
-    }catch{}
-  }
+  const out=[]; const re=/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m; while((m=re.exec(html))){ try{
+    const parsed = JSON.parse(m[1].trim());
+    const arr = Array.isArray(parsed) ? parsed : (parsed['@graph']||[parsed]);
+    out.push(...arr);
+  }catch{} }
   return out.filter(n => /MedicalClinic|MedicalOrganization|LocalBusiness|Organization|Place/i.test(n['@type']||''));
 }
 function first(arr){ return Array.isArray(arr)&&arr.length?arr[0]:undefined; }
 function join(parts){ return parts.filter(Boolean).join(', '); }
+
 function contactFromNode(n){
   const addr = n.address || {};
-  const cps = Array.isArray(n.contactPoint) ? n.contactPoint : (n.contactPoint ? [n.contactPoint] : []);
+  const cps  = Array.isArray(n.contactPoint) ? n.contactPoint : (n.contactPoint?[n.contactPoint]:[]);
+  const phone = n.telephone || first(cps.map(c=>c.telephone));
+  const email = n.email     || first(cps.map(c=>c.email));
   return {
     name: n.name || n.legalName,
     address: join([addr.streetAddress, addr.postOfficeBoxNumber]),
@@ -330,75 +351,178 @@ function contactFromNode(n){
     postalCode: addr.postalCode,
     region: addr.addressRegion,
     country: addr.addressCountry || "IT",
-    phone: n.telephone || first(cps.map(c=>c.telephone)),
-    email: n.email || first(cps.map(c=>c.email)),
+    phone, email,
     confidence: {
-      name: n.name?"high":"mid",
-      address: addr.streetAddress?"high":"mid",
-      city: addr.addressLocality?"high":"mid",
-      phone: (n.telephone||first(cps.map(c=>c.telephone)))?"high":"mid",
-      email: (n.email||first(cps.map(c=>c.email)))?"high":"mid"
-    }
+      name: n.name?'high':'mid',
+      address: addr.streetAddress?'high':'mid',
+      city: addr.addressLocality?'high':'mid',
+      phone: phone?'high':'mid',
+      email: email?'high':'mid'
+    },
+    _source: 'jsonld'
   };
 }
-const phoneRe = /((\+?39\s?)?0?\d[\d\s\-.]{6,})/i;
-const emailRe = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
-const addressRe = /\b(Via|Viale|Piazza|Corso|Largo|Strada|P\.le|P\.za)\s+[A-ZÀ-Ü][^,]{2,}\b.*?\d+\b/i;
-const capRe = /\b\d{5}\b/;
-function inferCity(text, address, cap){
-  const m = text.match(/\b([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*\(\s?[A-Z]{2}\s?\)/);
-  if (m) return m[1];
-  const fromAddr = address && address.split(',').map(s=>s.trim()).find(s => capRe.test(s) || /^[A-ZÀ-Ü]/.test(s));
-  if (fromAddr) return fromAddr.replace(capRe, '').trim();
-  return undefined;
+
+function extractContactsFromDOM(html, baseUrl){
+  const doc = new DOMParser().parseFromString(html,'text/html');
+  const siteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content') || '';
+  const h1 = doc.querySelector('h1')?.textContent?.trim() || '';
+  const logoAlt = doc.querySelector('img[alt*="logo" i]')?.getAttribute('alt') || '';
+  const title = (doc.querySelector('title')?.textContent||'').replace(/[\|\-–].+$/,'').trim();
+  const nameCandidate = [siteName, h1, logoAlt, title].find(s=>/poliambulatorio|clinica|centro|ambulatorio|istituto|medical|medico|analisi/i.test(s||'')) || siteName || h1 || title || '';
+
+  const telNodes = Array.from(doc.querySelectorAll('a[href^="tel:"]'));
+  const mailNodes = Array.from(doc.querySelectorAll('a[href^="mailto:"]'));
+  const mapNodes = Array.from(doc.querySelectorAll('a[href*="goo.gl/maps"], a[href*="google.com/maps"]'));
+
+  const contactBlocks = [
+    ...Array.from(doc.querySelectorAll('footer')),
+    ...Array.from(doc.querySelectorAll('section, div')).filter(el => CONTACT_HINTS.test((el.getAttribute('id')||'')+' '+(el.className||'')+' '+(el.textContent||'')))
+  ];
+
+  const micStreet = doc.querySelector('[itemprop="streetAddress"]')?.textContent?.trim();
+  const micLocality= doc.querySelector('[itemprop="addressLocality"]')?.textContent?.trim();
+  const micPostal = doc.querySelector('[itemprop="postalCode"]')?.textContent?.trim();
+
+  const candidates = [];
+  if (nameCandidate) candidates.push({ field:'name', value:nameCandidate, conf:'mid', note:'dom:name', weight:2 });
+
+  const siteDomain = getSiteDomain(baseUrl);
+  for (const a of telNodes){
+    const raw = a.getAttribute('href').replace(/^tel:/,'');
+    const ph = normalizePhone(raw);
+    if (ph) candidates.push({ field:'phone', value:ph, conf:'high', note:'tel: anchor', weight:4 });
+  }
+  contactBlocks.forEach(b=>{
+    const txt = around(b, 600);
+    const phones = (txt.match(PHONE_RE)||[]).map(normalizePhone);
+    phones.forEach(ph => candidates.push({ field:'phone', value:ph, conf:'mid', note:'contact-block', weight:3 }));
+  });
+
+  for (const a of mailNodes){
+    const em = (a.getAttribute('href')||'').replace(/^mailto:/i,'').trim();
+    candidates.push({ field:'email', value:em, conf: emailScore(em, siteDomain)>=7?'high':'mid', note:'mailto anchor', weight:4, score: emailScore(em, siteDomain) });
+  }
+  contactBlocks.forEach(b=>{
+    const txt = around(b, 800);
+    const emails = (txt.match(EMAIL_RE)||[]);
+    emails.forEach(em => candidates.push({ field:'email', value:em, conf: emailScore(em, siteDomain)>=7?'high':'mid', note:'contact-block', weight:3, score: emailScore(em, siteDomain) }));
+  });
+
+  const addressTags = Array.from(doc.querySelectorAll('address')).map(el=>el.textContent.replace(/\s+/g,' ').trim());
+  addressTags.forEach(t => candidates.push({ field:'address', value:t, conf: TOPONYM_RE.test(t)?'high':'mid', note:'<address>', weight:3 }));
+
+  if (micStreet || micLocality || micPostal){
+    const addr = join([micStreet, micPostal, micLocality]);
+    candidates.push({ field:'address', value:addr, conf:'high', note:'microdata itemprop', weight:4 });
+    if (micLocality) candidates.push({ field:'city', value:micLocality, conf:'high', note:'microdata locality', weight:4 });
+  }
+
+  mapNodes.forEach(a=>{
+    const t = (a.textContent||'').trim();
+    if (t && (ADDR_RE.test(t) || CAP_RE.test(t))) {
+      candidates.push({ field:'address', value:t, conf: TOPONYM_RE.test(t)?'mid':'low', note:'maps anchor text', weight:2 });
+    }
+  });
+
+  const allBlocks = contactBlocks.length? contactBlocks : [doc.body];
+  allBlocks.forEach(b=>{
+    const t = around(b, 1200);
+    const cap = (t.match(CAP_RE)||[])[0];
+    const addr = (t.match(ADDR_RE)||[])[0];
+    if (addr) candidates.push({ field:'address', value:addr + (cap?(' '+cap):''), conf: cap?'mid':'low', note:'regex address', weight:2 });
+    if (cap){
+      const cityFromProv = (t.match(/\b([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*\([A-Z]{2}\)/)||[])[1];
+      if (cityFromProv) candidates.push({ field:'city', value:cityFromProv, conf:'mid', note:'city+prov', weight:2 });
+    }
+  });
+
+  return aggregateCandidates(candidates, baseUrl);
 }
-function inferNameFromHtml(html){
-  const t = (html.match(/<title>([^<]{3,120})<\/title>/i)||[])[1];
-  const og = (html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i)||[])[1];
-  return og || t || "";
+function aggregateCandidates(cands, baseUrl){
+  const confRank = { low:1, mid:2, high:3 };
+  cands.sort((a,b) => (b.weight - a.weight) || (confRank[b.conf]-confRank[a.conf]) || ((b.score||0)-(a.score||0)));
+  const out = { name:'', city:'', address:'', phone:'', email:'', confidence:{name:'low',city:'low',address:'low',phone:'low',email:'low'} };
+  for (const c of cands){ if (!out[c.field]) { out[c.field] = c.value; out.confidence[c.field] = c.conf; } }
+  if (out.phone) out.phone = normalizePhone(out.phone);
+  if (!out.city && CAP_RE.test(out.address||'')){
+    const m = (out.address||'').split(',').map(s=>s.trim()).find(s => CAP_RE.test(s) || PROV_RE.test(s));
+    if (m){ out.city = m.replace(CAP_RE,'').replace(PROV_RE,'').trim(); out.confidence.city = 'mid'; }
+  }
+  if ((!out.name || out.name.length<3) && baseUrl){
+    try{ const host = new URL(baseUrl).hostname.replace(/^www\./,''); out.name = out.name || host; }catch{}
+  }
+  out._source = 'dom';
+  return out;
 }
-function extractContactsFromText(text){
-  const phone = (text.match(phoneRe)||[])[0];
-  const email = (text.match(emailRe)||[])[0];
-  const address = (text.match(addressRe)||[])[0];
-  const postal = (text.match(capRe)||[])[0];
-  const city = inferCity(text, address, postal);
+function extractContactsFromText(text, baseUrl){
+  const emails = (text.match(EMAIL_RE)||[]);
+  const phones = (text.match(PHONE_RE)||[]);
+  const address = (text.match(ADDR_RE)||[])[0];
+  const cap = (text.match(CAP_RE)||[])[0];
+  const cityFromProv = (text.match(/\b([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*\([A-Z]{2}\)/)||[])[1];
+  const city = cityFromProv || (address ? address.split(',').map(s=>s.trim()).find(s => CAP_RE.test(s) || PROV_RE.test(s))?.replace(CAP_RE,'').replace(PROV_RE,'').trim() : undefined);
+  const pickEmail = emails.sort((a,b)=> b.length-a.length)[0];
+  const pickPhone = phones.sort((a,b)=> (a.length<b.length?1:-1))[0];
   return {
     name: undefined,
-    address, city, postalCode: postal, phone, email,
-    confidence: {
-      name:"low", address: address?"mid":"low", city: city?"mid":"low",
-      phone: phone?"mid":"low", email: email?"mid":"low"
-    }
+    address: address ? (address + (cap?(' '+cap):'')) : undefined,
+    city, phone: pickPhone ? normalizePhone(pickPhone) : undefined, email: pickEmail,
+    confidence: { name:'low', address: address?'mid':'low', city: city?'mid':'low', phone: pickPhone?'mid':'low', email: pickEmail?'mid':'low' },
+    _source: 'text'
   };
 }
-function hasAnyContact(c){ return (c.name||c.address||c.city||c.phone||c.email); }
+function extractLocationsFromDOM(html, baseUrl){
+  const doc = new DOMParser().parseFromString(html,'text/html');
+  const heads = Array.from(doc.querySelectorAll('h2, h3')).filter(h => CITY_HINTS.test(h.textContent||''));
+  const locs = [];
+  for (const h of heads){
+    const block = document.createElement('div');
+    let n = h.nextElementSibling; let steps = 0;
+    while(n && !/^H[23]$/.test(n.tagName) && steps<10){ block.appendChild(n.cloneNode(true)); n = n.nextElementSibling; steps++; }
+    const subHtml = block.innerHTML || '';
+    const subRes = extractContactsFromDOM('<div>'+subHtml+'</div>', baseUrl);
+    const title = (h.textContent||'').trim();
+    if (!subRes.city && /\b[A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*\b/.test(title)) {
+      subRes.city = title.replace(CITY_HINTS,'').trim(); if (subRes.city) subRes.confidence.city = 'mid';
+    }
+    if (hasAnyContact(subRes)) locs.push(subRes);
+  }
+  return locs;
+}
+function hasAnyContact(c){ return !!(c && (c.name||c.address||c.city||c.phone||c.email)); }
 function dedupeLocations(locs){
-  const seen = new Set(); const out=[];
+  const seen=new Set(), out=[];
   for(const l of locs){
-    const key = (l.name||'')+'|'+(l.address||'')+'|'+(l.city||'');
+    const key = [(l.name||'').toLowerCase(), (l.address||'').toLowerCase(), (l.city||'').toLowerCase()].join('|');
     if(!seen.has(key)){ seen.add(key); out.push(l); }
   }
   return out;
 }
 function buildLocations(jsonLdNodes, pages, mainHtml){
+  const baseUrl = pages?.[0]?.url || '';
   const locs = [];
-  for(const n of jsonLdNodes){ const c=contactFromNode(n); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
-  // department/subOrganization
-  for(const n of jsonLdNodes){
+  for (const n of jsonLdNodes){ const c=contactFromNode(n); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
+  for (const n of jsonLdNodes){
     const deps = [].concat(n.department||[], n.subOrganization||[]);
-    for(const d of deps){ const c=contactFromNode(d); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
+    for (const d of deps){ const c=contactFromNode(d); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
   }
-  if(!locs.length){
-    for(const p of pages){
-      const c = extractContactsFromText(p.text||"");
-      if(hasAnyContact(c)) locs.push({ ...c, url:p.url });
+  for (const p of pages){
+    const d = extractContactsFromDOM(p.html||'', baseUrl);
+    if (hasAnyContact(d)) locs.push(d);
+    const many = extractLocationsFromDOM(p.html||'', baseUrl);
+    many.forEach(m => locs.push(m));
+  }
+  for (const p of pages){
+    if (p.url === 'pasted://'){
+      const t = extractContactsFromText(p.text||'', baseUrl);
+      if (hasAnyContact(t)) locs.push(t);
     }
   }
-  if(!locs.length){
-    // fallback: try infer name from HTML <title>/og:site_name
-    const inferredName = inferNameFromHtml(mainHtml);
-    if (inferredName) locs.push({ name: inferredName, confidence:{name:"mid"} });
+  if (!locs.length){
+    const doc = new DOMParser().parseFromString(mainHtml||'','text/html');
+    const title = (doc.querySelector('title')?.textContent||'').trim();
+    if (title) locs.push({ name: title, confidence:{name:'mid'} });
   }
   return dedupeLocations(locs);
 }
@@ -455,7 +579,7 @@ function detectAreas(pages){
   }
   function detectServizi(){ const hit=HIGH_CALL_RE.test(concat); return { score: hit?8:3, confidence: hit?'mid':'low', evidence: hit?'Servizi ad alta chiamata presenti':'Nessuna evidenza' }; }
   function detectDM(){ const hit=DM_RE.test(concat); return { score: hit?7:3, confidence: hit?'mid':'low', evidence: hit?'Ruolo/contatto di direzione':'Nessuna evidenza' }; }
-  function detectNum(){ const hasPh=phoneRe.test(concat); const tag=DIRECT_NUM_HINT.test(concat); return { score: hasPh?(tag?7:5):2, confidence: hasPh?'mid':'low', evidence: hasPh?'Telefono presente':'Nessuna evidenza' }; }
+  function detectNum(){ const hasPh=PHONE_RE.test(concat); const tag=DIRECT_NUM_HINT.test(concat); return { score: hasPh?(tag?7:5):2, confidence: hasPh?'mid':'low', evidence: hasPh?'Telefono presente':'Nessuna evidenza' }; }
 
   // Marketing
   function detectSeo(){ const titleOK=META_TITLE_RE.test(htmlAll); const descOK=META_DESC_RE.test(htmlAll); const sc = (!titleOK || !descOK)?7:3; return { score:sc, confidence:'mid', evidence:(!titleOK?'title mancante ':'')+(!descOK?'meta description debole':'') }; }
@@ -616,7 +740,8 @@ function refreshComms(){
   const nm = $("#name").value || (window.__locations?.[window.__locIndex||0]?.name)||"—";
   $("#script").value = buildScript(nm, reasons);
   const pitch = buildPitchMail({ name: $("#name").value, city: $("#city").value }, reasons);
-  $("#mailSubj").value = pitch.subject; $("#mailBody").value = pitch.body;
+  $("#mailSubj").value = pitch.subject; "#mailBody".value = pitch.body;
+  $("#mailBody").value = pitch.body;
 }
 
 // ================== Analyze flow ==================
@@ -665,7 +790,7 @@ async function analyze(){
     renderProvenance(pages);
 
     const reasons = t5.slice(0,3).map(x=>x.label);
-    const nm = $("#name").value || locations[0]?.name || inferNameFromHtml(pages[0]?.html||"");
+    const nm = $("#name").value || locations[0]?.name || (new DOMParser().parseFromString(pages[0]?.html||'','text/html').querySelector('title')?.textContent||"");
     $("#script").value = buildScript(nm, reasons);
     const pitch = buildPitchMail({ name: nm || $("#name").value, city: $("#city").value }, reasons);
     $("#mailSubj").value = pitch.subject; $("#mailBody").value = pitch.body;
@@ -779,6 +904,8 @@ $('#btnCopyContacts').addEventListener('click', copyContacts);
 $('#btnOpenWA').addEventListener('click', ()=>openWA($('#phone').value));
 $('#btnMailto').addEventListener('click', ()=>mailtoLead($('#email').value,$('#name').value));
 $('#search').addEventListener('input', renderQueue);
+$('#prevLoc').addEventListener('click', ()=>{ if((window.__locations||[]).length){ window.__locIndex = (window.__locIndex-1+window.__locations.length)%window.__locations.length; $('#locSelect').value=String(window.__locIndex); renderContact(window.__locations[window.__locIndex]); refreshComms(); updateLocLabel(); } });
+$('#nextLoc').addEventListener('click', ()=>{ if((window.__locations||[]).length){ window.__locIndex = (window.__locIndex+1)%window.__locations.length; $('#locSelect').value=String(window.__locIndex); renderContact(window.__locations[window.__locIndex]); refreshComms(); updateLocLabel(); } });
 
 // Init
 renderQueue(); setGauge(0); setStatus('Pronto.');
