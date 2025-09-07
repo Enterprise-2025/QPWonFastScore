@@ -1,10 +1,14 @@
-/* QPWON Proxy Worker — v2.4 (IT)
+/* QPWON Proxy Worker — v2.5 (IT)
    Scopo: permettere a una webapp frontend (senza dipendenze) di leggere HTML di terze parti bypassando CORS.
+   Novità v2.5:
+   - Decodifica "smart" con rilevazione charset (header + <meta charset>)
+   - Parametri per-req: ?timeout_ms, ?max_bytes, ?ua=(default|desktop), ?strip=1, ?text=1
+   - Migliorie CORS/SSRF e header esposti
    Endpoints
-   - GET /?url=https://target[&mode=light|full][&bypass_cache=1][&accept_lang=it-IT,it;q=0.9]
+   - GET /?url=https://target[&mode=light|full][&bypass_cache=1][&accept_lang=it-IT,it;q=0.9][&timeout_ms=12000][&max_bytes=1500000][&ua=desktop][&strip=1][&text=1]
    - GET /health
    Risposta:
-   { url, finalUrl, status, contentType, charset, length, truncated, html, htmlStripped? }
+   { url, finalUrl, status, contentType, charset, charsetUsed, length, truncated, html, htmlStripped?, text? }
    Sicurezza/Caching/CORS:
    - Allowlist CORS via env ALLOWED_ORIGINS (CSV) oppure pubblico (*) se non impostato e senza API_TOKEN
    - Token opzionale via env API_TOKEN (header Authorization: Bearer X o ?token=X)
@@ -26,7 +30,7 @@ export default {
 
     // Health
     if (reqUrl.pathname === "/health") {
-      return json({ ok: true, ver: "2.4", time: new Date().toISOString() }, 200, cors);
+      return json({ ok: true, ver: "2.5", time: new Date().toISOString() }, 200, cors);
     }
 
     if (request.method !== "GET") {
@@ -47,6 +51,13 @@ export default {
     const mode = (reqUrl.searchParams.get("mode") || "full").toLowerCase(); // full|light
     const bypassCache = reqUrl.searchParams.get("bypass_cache") === "1";
     const acceptLang = reqUrl.searchParams.get("accept_lang");
+    const strip = reqUrl.searchParams.get("strip") === "1";
+    const wantText = reqUrl.searchParams.get("text") === "1";
+
+    // per-request overrides (clamped)
+    const qTimeout = clampInt(parseInt(reqUrl.searchParams.get("timeout_ms")||""), 3000, 20000);
+    const qMax = clampInt(parseInt(reqUrl.searchParams.get("max_bytes")||""), 200_000, 5_000_000);
+    const uaMode = (reqUrl.searchParams.get("ua")||"").toLowerCase(); // "", "desktop"
     if (!target) return json({ error: "Missing url" }, 400, cors);
 
     let parsed;
@@ -60,19 +71,22 @@ export default {
 
     // ---- Edge cache (manual key to avoid tainting origin cache)
     const ttl = clampInt(parseInt(env?.CACHE_TTL, 10), 60, 86400) || 1800;
-    const cacheKey = new Request("https://qpwon-cache/" + encodeURIComponent(parsed.href) + "|" + mode, { method: "GET" });
+    const cacheKey = new Request("https://qpwon-cache/" + encodeURIComponent(parsed.href) + "|" + mode + "|" + (strip?1:0) + "|" + (wantText?1:0), { method: "GET" });
     const cache = caches.default;
 
     if (!bypassCache) {
       const cached = await cache.match(cacheKey);
-      if (cached) return attachCors(cached, { ...cors, "X-QPWON": "2.4", "X-Cache": "HIT" });
+      if (cached) return attachCors(cached, { ...cors, "X-QPWON": "2.5", "X-Cache": "HIT" });
     }
 
     // ---- Fetch target (with timeout)
-    const timeoutMs = clampInt(parseInt(env?.TIMEOUT_MS, 10), 3000, 20000) || 12000;
+    const timeoutMs = qTimeout || (clampInt(parseInt(env?.TIMEOUT_MS, 10), 3000, 20000) || 12000);
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
-    const ua = (env?.USER_AGENT || "QPWON-AutoAnalyzer/2.4").trim();
+
+    const uaEnv = (env?.USER_AGENT || "QPWON-AutoAnalyzer/2.5").trim();
+    const uaDesktop = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
+    const ua = (uaMode === "desktop") ? uaDesktop : uaEnv;
 
     const headers = {
       "user-agent": ua,
@@ -100,40 +114,48 @@ export default {
     }
     clearTimeout(id);
 
-    // ---- Read stream (cap)
-    const MAX_BYTES = clampInt(parseInt(env?.MAX_BYTES, 10), 200_000, 5_000_000) || 1_500_000;
-    let html = "", truncated = false;
+    const contentType = r.headers.get("content-type") || "";
+    const headerCharset = extractCharset(contentType);
+
+    // ---- Read stream (cap) + smart decode
+    const MAX_BYTES = qMax || (clampInt(parseInt(env?.MAX_BYTES, 10), 200_000, 5_000_000) || 1_500_000);
+    let text="", truncated=false, usedCharset = headerCharset || "utf-8";
     try {
-      const { text, truncated: t } = await readAsText(r, MAX_BYTES);
-      html = text; truncated = t;
+      const { bytes, t } = await readBytes(r, MAX_BYTES);
+      truncated = t;
+      usedCharset = pickCharset(bytes, headerCharset);
+      text = new TextDecoder(usedCharset || "utf-8").decode(bytes);
     } catch (e) {
       return json({ error: "Read failed", detail: String(e?.message || e) }, 502, cors);
     }
 
-    const contentType = r.headers.get("content-type") || "";
-    const charset = extractCharset(contentType) || "utf-8";
     const finalUrl = r.url || parsed.href;
+    let html = text;
+    if (strip || mode === "light") html = stripHtml(text);
 
     const payload = {
       url: parsed.href,
       finalUrl,
       status: r.status,
       contentType,
-      charset,
+      charset: headerCharset || "",
+      charsetUsed: usedCharset || "utf-8",
       length: html.length,
       truncated,
-      html,
+      html
     };
-    if (mode === "light") payload.htmlStripped = stripHtml(html);
+    if (mode === "light") payload.htmlStripped = html;
+    if (wantText) payload.text = stripToText(text);
 
     // ---- Cacheable base response (no CORS yet)
     const baseHeaders = {
       "Cache-Control": "public, max-age=0, must-revalidate",
       "Content-Type": "application/json; charset=UTF-8",
-      "X-QPWON": "2.4",
+      "X-QPWON": "2.5",
       "X-Cache": "MISS",
       "X-Truncated": String(truncated),
-      "Vary": "Origin"
+      "Vary": "Origin",
+      "Access-Control-Expose-Headers": "X-QPWON,X-Cache,X-Truncated"
     };
     const cacheable = new Response(JSON.stringify(payload), { status: 200, headers: baseHeaders });
 
@@ -146,7 +168,7 @@ export default {
 
 /* --------------- utils --------------- */
 function json(obj, status = 200, headers = {}) {
-  const h = new Headers({ "content-type": "application/json; charset=UTF-8", "Cache-Control": "public, max-age=0, must-revalidate", "Vary": "Origin", ...headers });
+  const h = new Headers({ "content-type": "application/json; charset=UTF-8", "Cache-Control": "public, max-age=0, must-revalidate", "Vary": "Origin", "Access-Control-Expose-Headers":"X-QPWON,X-Cache,X-Truncated", ...headers });
   return new Response(JSON.stringify(obj), { status, headers: h });
 }
 function parseAllowedOrigins(csv){
@@ -178,7 +200,7 @@ function extractToken(url, headers){
 function hostLooksPrivate(host){
   if (!host) return true;
   const h = host.toLowerCase();
-  if (h === "localhost" || h === "localhost.localdomain" || h.endsWith(".localhost") || h.endsWith(".local")) return true;
+  if (h === "localhost" || h === "localhost.localdomain" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".lan")) return true;
   // IPv4
   if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) {
     const [a,b] = h.split(".").map(n=>parseInt(n,10));
@@ -187,43 +209,65 @@ function hostLooksPrivate(host){
     if (a===192 && b===168) return true;
     if (a===172 && b>=16 && b<=31) return true;
   }
-  // IPv6 simple checks
+  // IPv6 basics
   if (h === "::1" || h === "0:0:0:0:0:0:0:1") return true;
-  if (h.startsWith("fe80:")) return true;
+  if (h.startsWith("fe80:")) return true; // link-local
+  if (h.startsWith("fc") || h.startsWith("fd")) return true; // unique local
   return false;
 }
 function clampInt(n, min, max){
-  const v = Number.isFinite(n) ? (n|0) : min;
+  const v = Number.isFinite(n) ? (n|0) : NaN;
+  if (!Number.isFinite(v)) return min;
   return Math.min(max, Math.max(min, v));
 }
-async function readAsText(response, maxBytes){
+// Read as bytes up to maxBytes
+async function readBytes(response, maxBytes){
   const reader = response.body?.getReader ? response.body.getReader() : null;
-  const decoder = new TextDecoder(); // utf-8
   if (!reader) {
-    let t = await response.text();
-    if (t.length > maxBytes) return { text: t.slice(0, maxBytes), truncated: true };
-    return { text: t, truncated: false };
+    const ab = await response.arrayBuffer();
+    const bytes = new Uint8Array(ab.slice(0, maxBytes));
+    return { bytes, t: ab.byteLength > maxBytes };
   }
-  let html = "", received = 0, truncated = false;
+  const chunks = []; let received = 0; let truncated = false;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     received += value.byteLength;
     if (received > maxBytes) {
       const allowed = Math.max(0, maxBytes - (received - value.byteLength));
-      html += decoder.decode(value.subarray(0, allowed), { stream: true });
+      if (allowed>0) chunks.push(value.subarray(0, allowed));
       truncated = true;
       break;
     }
-    html += decoder.decode(value, { stream: true });
+    chunks.push(value);
   }
-  html += decoder.decode();
-  return { text: html, truncated };
+  const size = chunks.reduce((s,c)=>s+c.byteLength,0);
+  const bytes = new Uint8Array(size);
+  let off=0;
+  for (const c of chunks){ bytes.set(c, off); off += c.byteLength; }
+  return { bytes, t: truncated };
 }
 function extractCharset(contentType){
   if (!contentType) return "";
-  const m = contentType.match(/charset=([A-Za-z0-9_-]+)/i);
+  const m = contentType.match(/charset=([A-Za-z0-9._-]+)/i);
   return m ? m[1].toLowerCase() : "";
+}
+function sniffMetaCharset(utf8Snippet){
+  try{
+    const m = utf8Snippet.match(/<meta[^>]+charset=["']?([\w-]+)["']?/i) ||
+              utf8Snippet.match(/content=["'][^"']*charset=([\w-]+)[^"']*["']/i);
+    return m ? (m[1]||"").toLowerCase() : "";
+  }catch{ return ""; }
+}
+function pickCharset(bytes, headerCharset){
+  // trust header first
+  if (headerCharset) return headerCharset.toLowerCase();
+  // quick sniff of first ~4096 bytes as UTF-8 (safe for ASCII tags)
+  const dec = new TextDecoder("utf-8", { fatal: false });
+  const snip = dec.decode(bytes.slice(0, Math.min(4096, bytes.length)));
+  const meta = sniffMetaCharset(snip);
+  if (meta) return meta;
+  return "utf-8";
 }
 function stripHtml(html){
   return String(html)
@@ -232,6 +276,16 @@ function stripHtml(html){
     .replace(/<noscript[\s\S]*?<\/noscript>/gi,'')
     .replace(/<svg[\s\S]*?<\/svg>/gi,'')
     .replace(/<(div|section|footer)[^>]+(?:id|class)=["'][^"']*(cookie|gdpr|consent|banner|policy)[^"']*["'][\s\S]*?<\/\1>/gi,'');
+}
+function stripToText(html){
+  return String(html)
+    .replace(/<script[\s\S]*?<\/script>/gi,' ')
+    .replace(/<style[\s\S]*?<\/style>/gi,' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi,' ')
+    .replace(/<svg[\s\S]*?<\/svg>/gi,' ')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
 }
 function attachCors(resp, extraHeaders){
   const h = new Headers(resp.headers);
