@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QPWON · Scoring Sprint (v1.7.1)</title>
+  <meta name="description" content="Analisi rapida per poliambulatori: score, top 5 debolezze, staff medico, contatti prioritari, advisor, multisede, debug. Nessuna dipendenza." />
+  <style>
+    :root{
+      --bg:#0f1220; --bg2:#121735; --card:#1b2140; --surface:#161c39; --line:#283060;
+      --text:#e7ecff; --muted:#9fb3db;
+      --accent:#7c5cff; --accent-2:#5c87ff;
+      --good:#2ecc71; --warn:#f1c40f; --cold:#4aa3ff; --danger:#ff6b6b;
+      --shadow:0 8px 24px rgba(0,0,0,.35); --r:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:linear-gradient(120deg,#0e1324,#0a0f1d); color:var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      font-feature-settings:"tnum" 1, "cv05" 1;
+    }
+    a{color:var(--accent)}
+    header{position:sticky;top:0;z-index:15;background:rgba(10,15,29,.7);backdrop-filter:blur(8px);border-bottom:1px solid #1f2648}
+    .topbar{display:flex;gap:12px;align-items:center;padding:12px 16px}
+    .brand{font-weight:800;letter-spacing:.2px}
+    .muted{color:var(--muted)}
+    .spacer{flex:1}
+    .pill{padding:6px 10px;border:1px solid #2a3260;border-radius:999px;color:var(--muted);font-size:12px}
+    button{appearance:none;border:1px solid #2a3260;border-radius:10px;padding:10px 14px;background:#202955;color:#fff;cursor:pointer;box-shadow:var(--shadow)}
+    button.btn-accent{background:var(--accent);border-color:#543cff}
+    button.btn-ghost{background:transparent}
+    button.btn-danger{background:var(--danger);border-color:#ff6b6b}
+    input,textarea,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #33407a;background:#0f1532;color:#e7ecff;outline:none}
+    textarea{min-height:110px;resize:vertical}
+    main{padding:18px;display:grid;gap:18px;grid-template-columns:1.15fr 1.35fr 1.1fr}
+    @media (max-width:1200px){ main{grid-template-columns:1fr} }
+    .card{background:linear-gradient(180deg,#1a2145,#12183a);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+    .card>h2{margin:0;padding:14px 16px;border-bottom:1px solid var(--line);font-size:16px;color:#cdd9ff;display:flex;align-items:center;gap:8px}
+    .content{padding:14px 16px}
+    .row{display:flex;gap:10px;align-items:center}
+    .col{display:flex;flex-direction:column;gap:10px}
+    .progress{height:8px;border:1px solid #25305b;border-radius:999px;overflow:hidden;background:#0d1430}
+    .progress>div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%}
+    .gauge-wrap{display:flex;align-items:center;justify-content:center;padding:6px 0}
+    .gauge{width:280px;height:160px}
+    .needle{transform-origin:140px 140px;transition:transform .4s ease}
+    .score-big{font-size:48px;font-weight:800;text-align:center;margin-top:0}
+    .band{display:flex;gap:8px;justify-content:center;align-items:center}
+    .dot{width:12px;height:12px;border-radius:50%}
+    .dot.cold{background:var(--cold)} .dot.warm{background:var(--warn)} .dot.hot{background:var(--good)}
+    .chip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #31407a;border-radius:999px;background:#141a3a;font-size:13px;margin:4px 6px 0 0}
+    .chip strong{font-weight:700}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th,td{font-size:13px;padding:8px 10px;text-align:left} thead th{color:#cfe1ff}
+    tbody tr{background:#11173a;border:1px solid var(--line)}
+    tbody tr td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
+    tbody tr td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+    .badge{padding:2px 6px;border:1px solid #33407a;border-radius:999px;font-size:11px;color:#cfe1ff}
+    .conf-low{background:#231a3d} .conf-mid{background:#1b2a55} .conf-high{background:#173a2d} .conf-guess{background:#3a2f17;border-color:#6a5110}
+    .kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .kpi .box{background:#0f1532;border:1px solid #2a3260;border-radius:12px;padding:10px}
+    .top5{display:flex;flex-wrap:wrap;gap:8px}
+    .toast{position:fixed;right:16px;top:66px;background:#1b2140;border:1px solid #2a3260;border-radius:10px;padding:10px 14px;box-shadow:var(--shadow);opacity:0;transform:translateY(-6px);transition:all .2s ease;pointer-events:none}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .debug-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .dbgbox{background:#0e1535;border:1px dashed #33407a;border-radius:12px;padding:10px}
+    .dbgbox h4{margin:0 0 6px 0;color:#cfe1ff}
+    .snip{font-size:12px;color:#cfe1ff;background:#0b1230;border:1px solid #2a3260;border-radius:8px;padding:8px;white-space:pre-wrap}
+    .tag{font-size:11px;border:1px solid #31407a;background:#141a3a;border-radius:999px;padding:2px 6px;color:#cfe1ff;margin-left:6px}
+    dialog{border:none;border-radius:14px;padding:0;max-width:min(820px,95vw)}
+    dialog::backdrop{background:rgba(0,0,0,.55)}
+    .dlg-body{background:#0e1430;border:1px solid #2a3260;color:#e7ecff;border-radius:14px;padding:14px}
+    .table{width:100%;border-collapse:collapse}
+    .table th,.table td{border-bottom:1px solid #2a3260;padding:8px 6px;font-size:13px;text-align:left}
+    .advisor{min-height:130px}
+  </style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div class="brand">QPWON · <span class="muted">Scoring Sprint</span></div>
+    <span class="pill">v1.7.1 · no deps</span>
+    <div class="spacer"></div>
+    <button id="btnSettings" class="btn-ghost">Impostazioni</button>
+    <button id="exportJSON" class="btn-ghost">Export JSON</button>
+    <button id="exportCSV" class="btn-ghost">Export CSV</button>
+    <button id="resetAll" class="btn-danger">Reset</button>
+  </div>
+</header>
+
+<main>
+  <!-- Col A -->
+  <section class="card">
+    <h2>1) URL → Analisi automatica</h2>
+    <div class="content col">
+      <div class="row">
+        <input id="url" type="url" placeholder="Incolla l'URL (es. https://www.polixyz.it)" />
+        <button id="analyze" class="btn-accent">Analizza</button>
+      </div>
+      <div class="progress"><div id="pbar"></div></div>
+      <div id="status" class="muted">Pronto.</div>
+
+      <details style="margin-top:6px">
+        <summary class="muted">Problemi di lettura? (Siti solo JS) • Incolla testo</summary>
+        <textarea id="pasted" placeholder="Incolla qui il testo della pagina e poi premi Analizza"></textarea>
+      </details>
+
+      <details style="margin-top:8px">
+        <summary class="muted">Provenienza pagine (debug)</summary>
+        <div id="prov" class="kpi" style="margin-top:8px"></div>
+      </details>
+
+      <details style="margin-top:8px">
+        <summary class="muted">Debugger: Footer/Contatti, Staff, Booking</summary>
+        <div class="debug-grid" style="margin-top:8px">
+          <div class="dbgbox">
+            <h4>Contatti trovati <span class="tag" id="dbgContactsCount">0</span></h4>
+            <div id="dbgContacts"></div>
+          </div>
+          <div class="dbgbox">
+            <h4>Blocchi Footer/Contatti <span class="tag" id="dbgBlocksCount">0</span></h4>
+            <div id="dbgBlocks"></div>
+          </div>
+          <div class="dbgbox">
+            <h4>Staff Finder <span class="tag" id="dbgStaffCount">0</span></h4>
+            <div id="dbgStaff"></div>
+          </div>
+          <div class="dbgbox" style="grid-column:1/3">
+            <h4>Prenotazione: provider/script/JSON-LD/form/CTA <span class="tag" id="dbgBookingCount">0</span></h4>
+            <div id="dbgBooking"></div>
+          </div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Col B -->
+  <section class="card">
+    <h2>2) Score, Staff, Aree & Advisor</h2>
+    <div class="content col">
+      <div class="gauge-wrap">
+        <div class="gauge">
+          <svg viewBox="0 0 280 160" xmlns="http://www.w3.org/2000/svg" aria-label="Gauge">
+            <defs>
+              <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="var(--cold)"/>
+                <stop offset="50%" stop-color="var(--warn)"/>
+                <stop offset="100%" stop-color="var(--good)"/>
+              </linearGradient>
+            </defs>
+            <path d="M 20 140 A 120 120 0 0 1 260 140" fill="none" stroke="#23305e" stroke-width="14" stroke-linecap="round"/>
+            <path id="arc" d="M 20 140 A 120 120 0 0 1 260 140" fill="none" stroke="url(#grad)" stroke-width="14" stroke-linecap="round" stroke-dasharray="0 377"/>
+            <g id="needle" class="needle">
+              <line x1="140" y1="140" x2="140" y2="42" stroke="#e7ecff" stroke-width="4"/>
+              <circle cx="140" cy="140" r="6" fill="#e7ecff"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="score-big" id="scoreText">0.0</div>
+      <div class="band"><span>Pallino:</span> <span id="dot" class="dot cold"></span> <span id="tempText" class="muted">freddo</span></div>
+      <div class="muted" id="coverage">Copertura segnali: 0%</div>
+
+      <div style="margin-top:8px">
+        <div class="row" style="align-items:center;gap:8px">
+          <strong>👩‍⚕️ Staff medico stimato:</strong> <span id="staffBadge" class="badge conf-low">0 (low)</span>
+          <button id="btnStaff" class="btn-ghost" style="margin-left:6px">Vedi elenco</button>
+        </div>
+      </div>
+
+      <div style="margin-top:8px">
+        <div class="row" style="align-items:center;gap:8px">
+          <strong>🔎 5 punti deboli principali</strong>
+        </div>
+        <div id="top5" class="top5" style="margin-top:6px"></div>
+      </div>
+
+      <table style="margin-top:10px">
+        <thead>
+          <tr><th>Area</th><th>Score</th><th>Confidenza</th><th>Evidenza</th></tr>
+        </thead>
+        <tbody id="areasBody"></tbody>
+      </table>
+
+      <details style="margin-top:8px" open>
+        <summary class="muted">🧠 Commento consulenziale (Advisor)</summary>
+        <textarea id="advisor" class="advisor" placeholder="Il commento verrà generato automaticamente…"></textarea>
+        <div class="row" style="gap:10px">
+          <button id="copyAdvisor" class="btn-ghost">Copia commento</button>
+          <button id="useAdvisorInPitch" class="btn-ghost">Inserisci nel pitch</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Col C -->
+  <section class="card">
+    <h2>3) Contatti, Script & Coda</h2>
+    <div class="content col">
+
+      <div id="multiWrap" class="row" style="justify-content:space-between;gap:10px">
+        <div class="row" style="gap:8px"><strong>Sede:</strong><span id="sedeLabel" class="muted">—</span></div>
+        <div class="row" style="gap:6px">
+          <button id="prevLoc" class="btn-ghost">◀</button>
+          <select id="locSelect" style="min-width:240px"></select>
+          <button id="nextLoc" class="btn-ghost">▶</button>
+        </div>
+      </div>
+
+      <div class="kpi" style="margin-top:8px">
+        <div class="box">
+          <label>Nome</label><input id="name" type="text" placeholder="Es. Poliambulatorio XYZ" />
+        </div>
+        <div class="box">
+          <label>Città</label><input id="city" type="text" placeholder="Es. Bologna" />
+        </div>
+        <div class="box">
+          <label>Telefono</label><input id="phone" type="tel" placeholder="+39…" />
+        </div>
+        <div class="box">
+          <label>Email</label><input id="email" type="email" placeholder="esempio@dominio.it" />
+        </div>
+        <div class="box" style="grid-column:1/2">
+          <label>Indirizzo</label><input id="address" type="text" placeholder="Via…, CAP…, Città…" />
+        </div>
+        <div class="box" style="grid-column:2/3">
+          <label>Sorgente</label><input id="sourceHint" type="text" placeholder="mailto / cloudflare / block / jsonld…" disabled />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:4px;gap:8px">
+        <span id="confName"    class="badge conf-low">name: low</span>
+        <span id="confCity"    class="badge conf-low">city: low</span>
+        <span id="confPhone"   class="badge conf-low">phone: low</span>
+        <span id="confEmail"   class="badge conf-low">email: low</span>
+        <span id="confAddress" class="badge conf-low">address: low</span>
+      </div>
+
+      <div style="margin-top:10px">
+        <div class="row" style="gap:12px">
+          <button id="btnCopyContacts" class="btn-ghost">Copia contatti</button>
+          <button id="btnOpenWA" class="btn-ghost">WhatsApp</button>
+          <button id="btnMailto" class="btn-ghost">Email</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="row" style="gap:12px">
+          <button id="tabScript" class="btn-accent">Script</button>
+          <button id="tabPitch" class="btn-ghost">Pitch mail</button>
+        </div>
+        <div id="scriptWrap" class="col" style="margin-top:8px">
+          <label>Script (WhatsApp / Call)</label>
+          <textarea id="script" placeholder="Verrà generato automaticamente…"></textarea>
+        </div>
+        <div id="pitchWrap" class="col" style="display:none;margin-top:8px">
+          <label>Oggetto</label><input id="mailSubj" type="text" />
+          <label>Corpo mail</label><textarea id="mailBody"></textarea>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="saveLead" class="btn-accent">Salva & metti in coda</button>
+        <input id="search" type="text" placeholder="Cerca nella coda… (nome, città)" />
+      </div>
+
+      <table style="margin-top:6px">
+        <thead><tr><th>Priorità</th><th>Struttura</th><th>Città</th><th>Score</th><th>Azioni</th></tr></thead>
+        <tbody id="queueBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- Impostazioni -->
+<dialog id="dlg">
+  <form method="dialog" class="dlg-body">
+    <h3 style="margin:0 0 8px 0">Impostazioni</h3>
+    <div style="display:grid;gap:10px">
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="resetAfterSave" checked/> Reset automatico dopo salvataggio
+      </label>
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="allowGuesses" checked/> Permetti 'guess' per telefono/email se non trovati
+      </label>
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="forceUADesktop" checked/> Forza UA desktop (maggior compatibilità)
+      </label>
+      <div>
+        <label>Modalità Accuratezza</label>
+        <select id="accuracyMode">
+          <option value="balanced">Bilanciata (consigliata)</option>
+          <option value="fast">Veloce</option>
+          <option value="deep">Approfondita</option>
+        </select>
+        <div class="muted">Controlla profondità e budget del crawler (link visitati).</div>
+      </div>
+      <div>
+        <label>Endpoint Proxy</label>
+        <input id="proxyEndpoint" type="url" placeholder="https://.../?url=" />
+        <div class="muted">Default: https://qpwonscorepro.apesce-consulente.workers.dev/?url=</div>
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button value="cancel" class="btn-ghost">Chiudi</button>
+      <button id="saveSettings" class="btn-accent">Salva</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Staff dialog -->
+<dialog id="dlgStaff">
+  <div class="dlg-body">
+    <h3 style="margin:0 0 8px 0">Elenco staff medico</h3>
+    <div id="staffConf" class="muted" style="margin-bottom:8px">Confidenza: —</div>
+    <div style="max-height:min(55vh,520px);overflow:auto;border:1px solid #2a3260;border-radius:12px">
+      <table class="table" id="tblStaff">
+        <thead><tr><th>Nome</th><th>Ruolo/Specialità</th><th>Fonte</th><th>Pagina</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button onclick="document.getElementById('dlgStaff').close()" class="btn-accent">Chiudi</button>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" class="toast">Azione completata.</div>
+
+<script>
+/* =====================================================
+   QPWON Scoring Sprint — index.html (v1.7.1) — No deps
+   Novità:
+   - Advisor auto
+   - Crawler Priority-BFS (accuratezza: veloce/bilanciata/approfondita)
+   - Contatti potenziati (entities, base64/atob, JS vars)
+   - Booking detection (form/CTA/ReserveAction)
+   - Staff Finder rifinito
+   - Fix minori (es. advisor reset)
+===================================================== */
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+const STORAGE = 'qpwon_scoring_v1_7_1';
+const DEFAULTS = {
+  proxyEndpoint: "https://qpwonscorepro.apesce-consulente.workers.dev/?url=",
+  resetAfterSave: true,
+  allowGuesses: true,
+  forceUADesktop: true,
+  accuracyMode: "balanced", // fast, balanced, deep
+  leads: []
+};
+const S = { load(){ try{ return JSON.parse(localStorage.getItem(STORAGE))||{...DEFAULTS}; }catch{ return {...DEFAULTS}; } },
+            save(v){ localStorage.setItem(STORAGE, JSON.stringify(v)); } };
+let state = S.load();
+
+function toast(t){ const el=$("#toast"); el.textContent=t; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"), 2200); }
+function setStatus(t){ $('#status').textContent = t; }
+function setProgress(p){ $('#pbar').style.width = p+'%'; }
+function esc(s){ return (s||'').replace(/[&<>\"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function uuid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+function clamp(n,a,b){ return Math.min(b, Math.max(a,n)); }
+
+// ---------- Proxy fetch ----------
+async function edgeFetch(url, opt={}){
+  const ep = (S.load().proxyEndpoint||DEFAULTS.proxyEndpoint).trim();
+  const params = new URLSearchParams();
+  if (S.load().forceUADesktop) params.set('ua','desktop');
+  params.set('strip', opt.strip? '1':'0');
+  params.set('text', opt.text? '1':'0');
+  if (opt.timeout) params.set('timeout_ms', String(opt.timeout));
+  if (opt.maxBytes) params.set('max_bytes', String(opt.maxBytes));
+  const full = ep + encodeURIComponent(url) + (ep.includes('?')? '&':'?') + params.toString();
+  const r = await fetch(full, { credentials:"omit" });
+  if(!r.ok) throw new Error("Proxy HTTP "+r.status);
+  const data = await r.json();
+  if(!data || typeof data.html!=="string") throw new Error("Risposta proxy non valida");
+  return { html:data.html, status:data.status||200, contentType:data.contentType||"", url:data.finalUrl||data.url||url, text:data.text||"" };
+}
+
+// ---------- Concurrency pool ----------
+async function fetchPool(urls, limit, worker){
+  const results = []; let i=0, active=0;
+  return await new Promise(resolve=>{
+    const next=()=>{
+      if(i>=urls.length && active===0) return resolve(results);
+      while(active<limit && i<urls.length){
+        const u = urls[i++]; active++;
+        worker(u).then(v=>results.push({ok:true,url:u,val:v}))
+                 .catch(e=>results.push({ok:false,url:u,err:e}))
+                 .finally(()=>{ active--; next(); });
+      }
+    };
+    next();
+  });
+}
+
+// ---------- Text helpers ----------
+function extractText(html){
+  try{
+    const doc = new DOMParser().parseFromString(html,'text/html');
+    doc.querySelectorAll('script,style,noscript,svg').forEach(n=>n.remove());
+    doc.querySelectorAll('[id*="cookie" i],[class*="cookie" i],[id*="gdpr" i],[class*="gdpr" i],[id*="consent" i],[class*="consent" i],[class*="banner" i],[id*="banner" i],[id*="policy" i],[class*="policy" i]').forEach(n=>n.remove());
+    return (doc.body?.innerText||'').replace(/\s+/g,' ').trim();
+  }catch(e){
+    return html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  }
+}
+function abs(base, href){ try{ return new URL(href, base).href; }catch{ return null; } }
+
+// ---------- Link discovery & ranking ----------
+const LINK_PATTERNS = /(medici|equipe|staff|team|professionisti|specialisti|chi-siamo|about|contatti|contact|prenota|prenotazioni|cup|segreteria|servizi|sedi|reparti|ambulatori|visite|prestazioni)/i;
+const FORCED_PATHS = ['/chi-siamo','/chisiamo','/about','/staff','/team','/equipe','/medici','/professionisti','/specialisti','/contatti','/contact','/prenota','/prenotazioni','/cup','/segreteria','/sedi','/servizi','/reparti','/ambulatori','/visite','/prestazioni'];
+
+function canonicalize(u){
+  try{
+    const x = new URL(u);
+    x.hash = '';
+    ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid'].forEach(k=>x.searchParams.delete(k));
+    return x.toString().replace(/\/+$/,'/');
+  }catch{ return u; }
+}
+
+function pickLinks(base, html){
+  const doc = new DOMParser().parseFromString(html,'text/html');
+  const baseURL = new URL(base);
+  const ans = Array.from(doc.querySelectorAll('a[href],button,a[role="button"]'));
+  const out = new Map();
+
+  function scoreFor(el, href){
+    let s = 0;
+    const t = ((el.textContent||'') + ' ' + (el.getAttribute('title')||'') + ' ' + (el.getAttribute('aria-label')||'')).toLowerCase();
+    const inNav = !!el.closest('nav');
+    const inFooter = !!el.closest('footer');
+    const inHeader = !!el.closest('header');
+
+    if (LINK_PATTERNS.test(href)) s += 30;
+    if (LINK_PATTERNS.test(t)) s += 25;
+    if (inNav || inHeader) s += 10;
+    if (inFooter) s += 8;
+
+    if (/privacy|cookie|termini|note-legali|pdf$/i.test(href)) s -= 60;
+    if (/^mailto:|^tel:/i.test(href)) s -= 40;
+    if (!/^https?:/i.test(href) && !href.startsWith('/')) s -= 10;
+
+    return s;
+  }
+
+  for(const el of ans){
+    const hrefRaw = el.getAttribute('href')||'';
+    const href = abs(base, hrefRaw); if (!href) continue;
+    const u = new URL(href);
+    if (u.origin !== baseURL.origin) continue; // solo link interni
+    const key = canonicalize(href);
+    const s = scoreFor(el, hrefRaw);
+    out.set(key, Math.max(out.get(key)||0, s));
+  }
+
+  FORCED_PATHS.forEach(p => out.set(baseURL.origin + p, Math.max(out.get(baseURL.origin + p)||0, 40)));
+  return Array.from(out.entries()).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+}
+
+async function maybeFetchSitemap(base){
+  try{
+    const u = new URL(base);
+    const mapUrl = u.origin + '/sitemap.xml';
+    const r = await edgeFetch(mapUrl, { strip:true, text:true, timeout:9000 });
+    const xml = r.html;
+    if (!/<urlset|<sitemapindex/i.test(xml)) return [];
+    const locs = Array.from(xml.matchAll(/<loc>(.*?)<\/loc>/gi)).map(m=>m[1].trim()).filter(Boolean);
+    const inDomain = locs.filter(x=>{ try{ return new URL(x).origin===u.origin; }catch{ return false; } });
+    return inDomain.filter(x => LINK_PATTERNS.test(x)).slice(0,50);
+  }catch{ return []; }
+}
+
+function budgetForAccuracy(){
+  switch(S.load().accuracyMode){
+    case 'fast': return { total: 8, concurrency: 3 };
+    case 'deep': return { total: 16, concurrency: 4 };
+    default: return { total: 12, concurrency: 3 };
+  }
+}
+
+async function crawlPriorityBFS(startUrl, mainHtml){
+  const base = new URL(startUrl).origin;
+  const budget = budgetForAccuracy();
+  const initial = pickLinks(base, mainHtml);
+  const extra = await maybeFetchSitemap(base);
+  const pool = Array.from(new Set([...initial, ...extra]));
+  const ranked = pool.slice(0, 120);
+  const toVisit = ranked.slice(0, budget.total);
+  const results = [];
+  if (!toVisit.length) return results;
+
+  const subs = await fetchPool(toVisit, budget.concurrency, async (l)=>{
+    const sub = await edgeFetch(l, { strip:false, text:true, timeout:12000 });
+    return { url:l, html: sub.html, text: extractText(sub.html) };
+  });
+  subs.filter(x=>x.ok).forEach(x => results.push({ url:x.url, role:"other", html:x.val.html, text:x.val.text }));
+  return results;
+}
+
+// ---------- Contact extraction ----------
+const PHONE_RE   = /((\+?39\s?)?0?\d[\d\s\-.]{6,})/g;
+const EMAIL_RE   = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const CAP_RE     = /\b\d{5}\b/;
+const PROV_RE    = /\(([A-Z]{2})\)/;
+const ADDR_RE    = /\b(Via|Viale|Piazza|P\.za|Corso|Largo|Strada|Str\.)\s+[A-ZÀ-Ü][^,]{1,80}?\s+\d+[A-Z]?(\s?\/\s?[A-Z0-9]+)?/i;
+const TOPONYM_RE = /\b(Via|Viale|Piazza|P\.za|Corso|Largo|Strada|Str\.)\b/i;
+const CITY_HINTS = /\b(Sede|Ambulatorio|Centro|Poliambulatorio|Laboratorio|Punto\s+prelievi)\b/i;
+const CONTACT_HINTS = /\b(Contatti|Segreteria|Prenotazioni|CUP|Accettazione|Reception)\b/i;
+
+const EMAIL_PRIORITY = ['prenotazioni','segreteria','cup','accettazione','booking','reception','frontoffice','amministrazione','direzione','contatti','info'];
+
+function decodeCfEmail(hex) {
+  try {
+    hex = String(hex).trim();
+    const key = parseInt(hex.slice(0, 2), 16);
+    let out = "";
+    for (let i = 2; i < hex.length; i += 2) {
+      const code = parseInt(hex.slice(i, i + 2), 16) ^ key;
+      out += String.fromCharCode(code);
+    }
+    return out;
+  } catch { return ""; }
+}
+function decodeEntities(s){
+  return String(s||'')
+    .replace(/&#(\d+);/g, (_,n)=>String.fromCharCode(parseInt(n,10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_,h)=>String.fromCharCode(parseInt(h,16)))
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+}
+function deobfuscateEmailText(s) {
+  let t = decodeEntities(String(s || ""));
+  t = t.replace(/\s*\[?\s*(?:chiocciola|at)\s*\]?\s*/gi, "@");
+  t = t.replace(/\s*\[?\s*(?:punto|dot)\s*\]?\s*/gi, ".");
+  t = t.replace(/\s*\(at\)\s*/gi, "@").replace(/\s*\(dot\)\s*/gi, ".");
+  t = t.replace(/\s+at\s+/gi, "@").replace(/\s+dot\s+/gi, ".");
+  return t;
+}
+function decodePossibleBase64(str){
+  try{
+    const m = String(str||'').match(/atob\(["']([A-Za-z0-9+/=]{8,})["']\)/i);
+    if (m) {
+      const txt = atob(m[1]);
+      if (/@/.test(txt)) return txt;
+    }
+    const m2 = String(str||'').match(/\b([A-Za-z0-9+/]{16,}={0,2})\b/);
+    if (m2){
+      const d = atob(m2[1]);
+      if (/@/.test(d)) return d;
+    }
+  }catch{}
+  return '';
+}
+function getSiteDomain(fromUrl){ try{ return new URL(fromUrl||'').hostname.replace(/^www\./,''); }catch{ return ''; } }
+function baseDomain(host){
+  const h = String(host||'').toLowerCase();
+  const parts = h.split('.');
+  if (parts.length<=2) return h;
+  const tld2 = ['co.uk','com.au','com.br','com.ar','gov.it','edu.it'];
+  const last2 = parts.slice(-2).join('.');
+  const last3 = parts.slice(-3).join('.');
+  if (tld2.includes(last2)) return parts.slice(-3).join('.');
+  if (tld2.includes(last3)) return parts.slice(-4).join('.');
+  return last2;
+}
+function emailScore(email, siteDomain){
+  const [local, domain] = String(email).toLowerCase().split('@'); let s = 0;
+  for (let i=0;i<EMAIL_PRIORITY.length;i++){ if (local?.includes(EMAIL_PRIORITY[i])) { s += (EMAIL_PRIORITY.length-i); break; } }
+  const bd = baseDomain(domain||'');
+  if (siteDomain && domain && baseDomain(domain).endsWith(baseDomain(siteDomain))) s += 5;
+  if (/gmail\.com|yahoo\.|hotmail|libero\.it|outlook\.com/i.test(domain)) s -= 2;
+  if (/no-?reply|noreply|donotreply/.test(local)) s -= 3;
+  return s;
+}
+function normalizePhone(ph){
+  let p = String(ph||'').replace(/[^\d]/g,'');
+  if (!p) return '';
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.startsWith('39')) return '+39'+p.slice(2);
+  if (p[0]==='0'){ p = p.replace(/^0+/, ''); return '+39'+p; }
+  if (p[0]==='3' && p.length>=9) return '+39'+p;
+  return '+39'+p;
+}
+function around(node, maxChars=280){ const txt=(node?.textContent||'').replace(/\s+/g,' ').trim(); return txt.slice(0,maxChars); }
+function first(arr){ return Array.isArray(arr)&&arr.length?arr[0]:undefined; }
+function join(parts){ return parts.filter(Boolean).join(', '); }
+
+function extractJsonLd(html){
+  const out=[]; const re=/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m; while((m=re.exec(html))){ try{
+    const raw = m[1].trim();
+    const parsed = JSON.parse(raw);
+    const arr = Array.isArray(parsed) ? parsed : (parsed['@graph']||[parsed]);
+    out.push(...arr);
+  }catch{} }
+  return out;
+}
+
+function aggregateCandidates(cands){
+  const confRank = { low:1, mid:2, high:3, guess:0 };
+  cands.sort((a,b) => (b.weight - a.weight) || (confRank[b.conf]-confRank[a.conf]) || ((b.score||0)-(a.score||0)));
+  return cands;
+}
+function rankEmails(cands, siteDomain){
+  cands.forEach(c=>{ c.score = (c.score||0) + emailScore(c.value, siteDomain); });
+  const ranked = aggregateCandidates(cands.filter(c=>c.value));
+  return ranked;
+}
+function rankPhones(cands){
+  const srcBoost = { 'tel':6,'contact-block':4,'jsonld':5,'wa':5,'data-attr':4,'js-var':4,'body':2,'maps':3 };
+  cands.forEach(c=>{ c.score = (c.score||0) + (srcBoost[c.note]||0) + (c.value?.length||0)/20; });
+  const ranked = aggregateCandidates(cands.filter(c=>c.value));
+  return ranked;
+}
+function guessEmailFromDomain(siteUrl){
+  const host = getSiteDomain(siteUrl)||'';
+  if (!host) return null;
+  const localCandidates = ['prenotazioni','segreteria','cup','accettazione','booking','info','contatti','amministrazione','direzione'];
+  const dom = baseDomain(host);
+  return localCandidates.map(l => (l+'@'+dom));
+}
+
+function extractContactsFromDOM(html, baseUrl){
+  const doc = new DOMParser().parseFromString(html,'text/html');
+  const siteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content') || '';
+  const h1 = doc.querySelector('h1')?.textContent?.trim() || '';
+  const logoAlt = doc.querySelector('img[alt*="logo" i]')?.getAttribute('alt') || '';
+  const title = (doc.querySelector('title')?.textContent||'').replace(/[\|\-–].+$/,'').trim();
+  const nameCandidate = [siteName, h1, logoAlt, title].find(s=>/poliambulatorio|clinica|centro|ambulatorio|istituto|medical|medico|analisi/i.test(s||'')) || siteName || h1 || title || '';
+
+  const telNodes = Array.from(doc.querySelectorAll('a[href^="tel:"]'));
+  const mailNodes = Array.from(doc.querySelectorAll('a[href^="mailto:"]'));
+
+  const contactBlocks = [
+    ...Array.from(doc.querySelectorAll('footer')),
+    ...Array.from(doc.querySelectorAll('section, div')).filter(el => CONTACT_HINTS.test((el.getAttribute('id')||'')+' '+(el.className||'')+' '+(el.textContent||'')))
+  ];
+
+  const micStreet = doc.querySelector('[itemprop="streetAddress"]')?.textContent?.trim();
+  const micLocality= doc.querySelector('[itemprop="addressLocality"]')?.textContent?.trim();
+  const micPostal = doc.querySelector('[itemprop="postalCode"]')?.textContent?.trim();
+
+  const candidates = { name:[], city:[], address:[], phone:[], email:[] };
+  const debug = [];
+  const siteDomain = getSiteDomain(baseUrl);
+
+  if (nameCandidate) {
+    candidates.name.push({ value:nameCandidate, conf:'mid', weight:2, note:'dom:name' });
+    debug.push({ type:'name', field:'name', note:'og:site_name/H1/title/logo', snippet: nameCandidate });
+  }
+
+  for (const a of telNodes){
+    const raw = a.getAttribute('href').replace(/^tel:/,'');
+    const ph = normalizePhone(raw);
+    if (ph) { candidates.phone.push({ value:ph, conf:'high', note:'tel', weight:6 }); debug.push({type:'phone', field:'phone', note:'tel', snippet: (a.textContent||'').trim()||ph}); }
+  }
+
+  // Cloudflare email-protection
+  doc.querySelectorAll('a[href^="/cdn-cgi/l/email-protection#"], span.__cf_email__').forEach(el => {
+    const hex = el.getAttribute('data-cfemail') || (el.getAttribute('href')||'').split('#')[1];
+    if (hex) {
+      const em = decodeCfEmail(hex);
+      if (em && EMAIL_RE.test(em)) {
+        const score = emailScore(em, siteDomain);
+        candidates.email.push({ value:em, conf: score>=7?'high':'mid', note:'cloudflare-protection', weight:6, score });
+        debug.push({ type:'email', field:'email', note:'cloudflare-protection', snippet: em });
+      }
+    }
+  });
+
+  // Email in data-attribute e JS vars
+  doc.querySelectorAll('[data-email],[data-mail],[data-contact-email]').forEach(el => {
+    const raw = el.getAttribute('data-email') || el.getAttribute('data-mail') || el.getAttribute('data-contact-email') || '';
+    const em = deobfuscateEmailText(raw);
+    if (EMAIL_RE.test(em)) {
+      const score = emailScore(em, siteDomain);
+      candidates.email.push({ value:em, conf: score>=7?'high':'mid', note:'data-attr', weight:5, score });
+      debug.push({ type:'email', field:'email', note:'data-attr', snippet: em });
+    }
+  });
+  // JS variables likely
+  const jsText = Array.from(doc.querySelectorAll('script')).map(s=>s.textContent||'').join('\n');
+  const jsGuessed = decodePossibleBase64(jsText) || '';
+  if (jsGuessed && EMAIL_RE.test(jsGuessed)) {
+    const sc = emailScore(jsGuessed, siteDomain);
+    candidates.email.push({ value:jsGuessed, conf: sc>=7?'high':'mid', note:'js-var', weight:5, score: sc });
+    debug.push({ type:'email', field:'email', note:'js-var', snippet: jsGuessed.slice(0,120) });
+  }
+  const assignMail = (jsText.match(/email\s*[:=]\s*['"]([^'"]+)['"]/i)||[])[1];
+  if (assignMail && EMAIL_RE.test(assignMail)){
+    const em = deobfuscateEmailText(assignMail);
+    const sc = emailScore(em, siteDomain);
+    candidates.email.push({ value:em, conf: sc>=7?'high':'mid', note:'js-var', weight:5, score:sc });
+  }
+
+  // Mailto
+  for (const a of mailNodes){
+    const em = (a.getAttribute('href')||'').replace(/^mailto:/i,'').trim();
+    if (em) {
+      const score = emailScore(em, siteDomain);
+      candidates.email.push({ value:em, conf: score>=7?'high':'mid', note:'mailto', weight:6, score });
+      debug.push({ type:'email', field:'email', note:'mailto', snippet: (a.textContent||'').trim()||em });
+    }
+  }
+
+  // Contact blocks (footer/contatti)
+  contactBlocks.forEach(b=>{
+    const rawTxt = around(b, 1200);
+    const txt = deobfuscateEmailText(rawTxt) + ' ' + decodeEntities(rawTxt);
+    (txt.match(PHONE_RE)||[]).map(normalizePhone).forEach(ph => { candidates.phone.push({ value:ph, conf:'mid', note:'contact-block', weight:4 }); debug.push({type:'phone', field:'phone', note:'contact-block', snippet: rawTxt.slice(0,220)}); });
+    (txt.match(EMAIL_RE)||[]).forEach(em => { const sc=emailScore(em, siteDomain); candidates.email.push({ value:em, conf: sc>=7?'high':'mid', note:'contact-block', weight:4, score:sc }); debug.push({type:'email', field:'email', note:'contact-block', snippet: rawTxt.slice(0,220)}); });
+  });
+
+  // <address>
+  Array.from(doc.querySelectorAll('address')).map(el=>el.textContent.replace(/\s+/g,' ').trim()).forEach(t => {
+    candidates.address.push({ value:t, conf: TOPONYM_RE.test(t)?'high':'mid', note:'<address>', weight:3 });
+    debug.push({ type:'address', field:'address', note:'<address>', snippet: t.slice(0,220)});
+  });
+
+  // Microdata
+  if (micStreet || micLocality || micPostal){
+    const addr = join([micStreet, micPostal, micLocality]);
+    candidates.address.push({ value:addr, conf:'high', note:'microdata itemprop', weight:5 });
+    if (micLocality) candidates.city.push({ value:micLocality, conf:'high', note:'microdata locality', weight:5 });
+    debug.push({ type:'address', field:'address', note:'microdata', snippet: addr });
+  }
+
+  // Maps anchor → address
+  Array.from(doc.querySelectorAll('a[href*="goo.gl/maps"], a[href*="google.com/maps"]')).forEach(a=>{
+    const t = (a.textContent||'').trim();
+    if (t && (ADDR_RE.test(t) || CAP_RE.test(t))) {
+      candidates.address.push({ value:t, conf: TOPONYM_RE.test(t)?'mid':'low', note:'maps', weight:3 });
+      debug.push({ type:'address', field:'address', note:'maps', snippet: t.slice(0,220) });
+    }
+  });
+
+  // Body-wide fallback
+  const fullText = deobfuscateEmailText(doc.body?.innerText || '') + ' ' + decodeEntities(doc.body?.innerText||'');
+  (fullText.match(EMAIL_RE) || []).forEach(em => {
+    const score = emailScore(em, siteDomain);
+    candidates.email.push({ value:em, conf: score>=7?'high':'mid', note:'body', weight:2, score });
+    debug.push({ type:'email', field:'email', note:'body', snippet: em.slice(0,120) });
+  });
+  (fullText.match(PHONE_RE) || []).map(normalizePhone).forEach(ph => {
+    candidates.phone.push({ value:ph, conf:'low', note:'body', weight:2 });
+  });
+
+  // Aggregate picks
+  const pick = { name:'', city:'', address:'', phone:'', email:'', confidence:{name:'low',city:'low',address:'low',phone:'low',email:'low'} };
+  const rankedEmails = rankEmails(candidates.email, siteDomain);
+  const rankedPhones = rankPhones(candidates.phone);
+  const rankedNames  = aggregateCandidates(candidates.name);
+  const rankedAddr   = aggregateCandidates(candidates.address);
+  const rankedCity   = aggregateCandidates(candidates.city);
+
+  if (rankedNames[0]) { pick.name = rankedNames[0].value; pick.confidence.name = rankedNames[0].conf; }
+  if (rankedAddr[0])  { pick.address = rankedAddr[0].value; pick.confidence.address = rankedAddr[0].conf; }
+  if (rankedCity[0])  { pick.city = rankedCity[0].value; pick.confidence.city = rankedCity[0].conf; }
+  if (rankedPhones[0]){ pick.phone = rankedPhones[0].value; pick.confidence.phone = rankedPhones[0].conf; }
+  if (rankedEmails[0]){ pick.email = rankedEmails[0].value; pick.confidence.email = rankedEmails[0].conf; }
+
+  pick._debug = debug;
+  pick._source = 'dom';
+  pick._sourceHint = [rankedEmails[0]?.note, rankedPhones[0]?.note].filter(Boolean).join('/');
+  return pick;
+}
+
+function extractContactsFromText(text, baseUrl){
+  const emails = (deobfuscateEmailText(text).match(EMAIL_RE)||[]);
+  const phones = (text.match(PHONE_RE)||[]);
+  const address = (text.match(ADDR_RE)||[])[0];
+  const cap = (text.match(CAP_RE)||[])[0];
+  const cityFromProv = (text.match(/\b([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*\([A-Z]{2}\)/)||[])[1];
+  const city = cityFromProv || (address ? address.split(',').map(s=>s.trim()).find(s => CAP_RE.test(s) || PROV_RE.test(s))?.replace(CAP_RE,'').replace(PROV_RE,'').trim() : undefined);
+  const pickEmail = emails.sort((a,b)=> (emailScore(a,getSiteDomain(baseUrl))>emailScore(b,getSiteDomain(baseUrl))?-1:1))[0];
+  const pickPhone = phones.sort((a,b)=> (a.length<b.length?1:-1))[0];
+  return {
+    name: undefined,
+    address: address ? (address + (cap?(' '+cap):'')) : undefined,
+    city, phone: pickPhone ? normalizePhone(pickPhone) : undefined, email: pickEmail,
+    confidence: { name:'low', address: address?'mid':'low', city: city?'mid':'low', phone: pickPhone?'mid':'low', email: pickEmail?'mid':'low' },
+    _source: 'text',
+    _debug: [{ type:'text-fallback', field:'all', note:'estrazione su testo incollato', snippet: (text||'').slice(0,220) }]
+  };
+}
+
+// ---------- Multisede ----------
+function extractLocationsFromDOM(html, baseUrl){
+  const doc = new DOMParser().parseFromString(html,'text/html');
+  const heads = Array.from(doc.querySelectorAll('h2, h3')).filter(h => CITY_HINTS.test(h.textContent||''));
+  const locs = [];
+  for (const h of heads){
+    const block = document.createElement('div');
+    let n = h.nextElementSibling; let steps = 0;
+    while(n && !/^H[23]$/.test(n.tagName) && steps<10){ block.appendChild(n.cloneNode(true)); n = n.nextElementSibling; steps++; }
+    const subRes = extractContactsFromDOM('<div>'+block.innerHTML+'</div>', baseUrl);
+    const title = (h.textContent||'').trim();
+    if (!subRes.city && /\b[A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*\b/.test(title)) {
+      subRes.city = title.replace(CITY_HINTS,'').trim(); if (subRes.city) subRes.confidence.city = 'mid';
+    }
+    if (hasAnyContact(subRes)) locs.push(subRes);
+  }
+  return locs;
+}
+function hasAnyContact(c){ return !!(c && (c.name||c.address||c.city||c.phone||c.email)); }
+function dedupeLocations(locs){
+  const seen=new Set(), out=[];
+  for(const l of locs){
+    const key = [(l.name||'').toLowerCase(), (l.address||'').toLowerCase(), (l.city||'').toLowerCase()].join('|');
+    if(!seen.has(key)){ seen.add(key); out.push(l); }
+  }
+  return out;
+}
+
+function contactFromNode(n){
+  const addr = n.address || {};
+  const cps  = Array.isArray(n.contactPoint) ? n.contactPoint : (n.contactPoint?[n.contactPoint]:[]);
+  const phone = n.telephone || first(cps.map(c=>c.telephone));
+  const email = n.email     || first(cps.map(c=>c.email));
+  return {
+    name: n.name || n.legalName,
+    address: join([addr.streetAddress, addr.postOfficeBoxNumber, addr.postalCode, addr.addressLocality]),
+    city: addr.addressLocality,
+    phone, email,
+    confidence: {
+      name: n.name?'high':'mid',
+      address: addr.streetAddress?'high':'mid',
+      city: addr.addressLocality?'high':'mid',
+      phone: phone?'high':'mid',
+      email: email?'high':'mid'
+    },
+    _source: 'jsonld',
+    _debug: [{type:'jsonld', field:'all', note:'JSON-LD Organization/Place', snippet: (n.name||'') + ' ' + (addr.streetAddress||'') }]
+  };
+}
+function buildLocations(jsonLdNodes, pages, mainHtml){
+  const baseUrl = pages?.[0]?.url || '';
+  const locs = [];
+  const debugBlocks = [];
+
+  for (const n of jsonLdNodes){ if(/(MedicalClinic|MedicalOrganization|LocalBusiness|Organization|Place)/i.test(n['@type']||'')){ const c=contactFromNode(n); if(hasAnyContact(c)) locs.push({ ...c, url:null }); } }
+  for (const n of jsonLdNodes){
+    const deps = [].concat(n.department||[], n.subOrganization||[]);
+    for (const d of deps){ const c=contactFromNode(d); if(hasAnyContact(c)) locs.push({ ...c, url:null }); }
+  }
+
+  for (const p of pages){
+    const d = extractContactsFromDOM(p.html||'', baseUrl);
+    if (d._debug) debugBlocks.push(...d._debug.map(x=>({ ...x, page:p.url })));
+    if (hasAnyContact(d)) locs.push(d);
+    const many = extractLocationsFromDOM(p.html||'', baseUrl);
+    many.forEach(m => { if (m._debug) debugBlocks.push(...m._debug.map(x=>({ ...x, page:p.url }))); locs.push(m); });
+  }
+
+  for (const p of pages){
+    if (p.url === 'pasted://'){
+      const t = extractContactsFromText(p.text||'', baseUrl);
+      if (t._debug) debugBlocks.push(...t._debug.map(x=>({ ...x, page:p.url })));
+      if (hasAnyContact(t)) locs.push(t);
+    }
+  }
+
+  if (!locs.length){
+    const doc = new DOMParser().parseFromString(mainHtml||'','text/html');
+    const title = (doc.querySelector('title')?.textContent||'').trim();
+    if (title) locs.push({ name: title, confidence:{name:'mid'} });
+  }
+
+  window.__debug = window.__debug || {};
+  window.__debug.blocks = debugBlocks;
+  return dedupeLocations(locs);
+}
+
+// ---------- Staff Finder ----------
+const NAME_RE = /\b(?:Dr\.?|Dott\.?|Dottssa?\.?|Prof\.?)?\s*[A-ZÀ-Ù][a-zà-ù]+(?:\s+[A-ZÀ-Ù][a-zà-ù]+){1,3}\b/;
+const MEDICAL_KW = /(medic|specialist|chirurg|cardiolog|dermatolog|ginecolog|ortoped|otorino|urol|radiolog|fisiatr|psichiatr|neurolog|odontoiatr|oculist|endocrinol|pediatr|geriat|allergolog|androlog)/i;
+const NON_MED_KW = /(segreteria|reception|front\s*office|amministrazione|marketing|comunicazione|direzione\s+amministrativa)/i;
+function classifyRole(t){
+  if (MEDICAL_KW.test(t)) return 'medico';
+  if (NON_MED_KW.test(t)) return 'altro';
+  return 'sanitario';
+}
+function extractStaffFromJSONLD(nodes, pageUrl){
+  const out=[];
+  for (const n of nodes){
+    const type = (n['@type']||'').toString().toLowerCase();
+    if (type.includes('person')){
+      const name = n.name || (n.givenName && n.familyName && (n.givenName+' '+n.familyName)) || '';
+      const role = n.jobTitle || n.hasOccupation?.name || '';
+      if (name){
+        out.push({ name, role, kind: classifyRole(role||name), source:'jsonld', page:pageUrl });
+      }
+    }
+    const members = [].concat(n.member||[], n.employee||[], n.members||[]);
+    for (const m of members){
+      const name = m?.name;
+      const role = m?.jobTitle || '';
+      if (name) out.push({ name, role, kind: classifyRole(role||name), source:'jsonld', page:pageUrl });
+    }
+  }
+  return out;
+}
+function extractStaffFromDOM(html, pageUrl){
+  const doc = new DOMParser().parseFromString(html,'text/html');
+  const blocks = Array.from(doc.querySelectorAll('[class*="team" i],[class*="staff" i],[class*="equipe" i],[class*="doctor" i],[id*="team" i],[id*="staff" i],[id*="equipe" i]'));
+  const out=[];
+  const scanBlock = (el)=>{
+    const cards = el.querySelectorAll('article,li,div,section,figure');
+    cards.forEach(c => {
+      const nameEl = c.querySelector('h2,h3,h4,strong,figcaption,li,strong');
+      let name = (nameEl?.textContent||'').trim();
+      if (!name || name.length<4){
+        const m = (c.textContent||'').match(NAME_RE);
+        if (m) name = m[0].trim();
+      }
+      if (name){
+        let role = '';
+        const roleEl = c.querySelector('.role,[class*="spec" i],[class*="title" i],[class*="qualif" i],p,small,em,li');
+        role = (roleEl?.textContent||'').trim();
+        out.push({ name, role, kind: classifyRole(role||name), source:'dom', page:pageUrl });
+      }
+    });
+  };
+  blocks.forEach(scanBlock);
+
+  Array.from(doc.querySelectorAll('h2,h3')).filter(h=>/(staff|equipe|medici|professionisti)/i.test(h.textContent||'')).forEach(h=>{
+    const m = (h.textContent||'').match(NAME_RE);
+    if (m) out.push({ name:m[0].trim(), role:'', kind:'medico', source:'dom', page:pageUrl });
+  });
+
+  const all = (doc.body?.innerText||'').split(/\n+/).map(s=>s.trim()).filter(s=>s.length>=6);
+  all.forEach(line =>{
+    if (/(Dott\.|Dottore|Dottoressa|Dr\.|Prof\.)/i.test(line)){
+      const m = line.match(NAME_RE);
+      if (m) out.push({ name:m[0].trim(), role: line.replace(m[0],'').trim().slice(0,120), kind: classifyRole(line), source:'text', page:pageUrl });
+    }
+  });
+  return out;
+}
+function dedupePeople(list){
+  const seen=new Map(), out=[];
+  for (const p of list){
+    const key = (p.name||'').toLowerCase().replace(/\s+/g,' ').trim();
+    if (!key) continue;
+    if (!seen.has(key)){ seen.set(key, p); out.push(p); }
+  }
+  return out;
+}
+function staffConfidence(items){
+  const hasJSONLD = items.some(x=>x.source==='jsonld');
+  const hasDOM = items.some(x=>x.source==='dom');
+  if (hasJSONLD) return 'high';
+  if (hasDOM) return 'mid';
+  return items.length?'low':'low';
+}
+
+// ---------- Areas detection ----------
+const BOOKING_PROVIDERS_RE = /miodottore|docplanner|doctolib|cupsolidale|dottori\.it|prenotami\.cloud|calendly\.com|simplybook|setmore|acuityscheduling|youcanbook\.me/i;
+const BOOKING_KEYWORDS_RE = /(prenota(zione)?(\s*online)?|prenota\s*ora|book(ing)?|appuntamenti?|agenda|cup|prenotami|richiedi\s+(appuntamento|visita))/i;
+const PHONE_STRESS = /(linee? occupat[ae]|sempre occupato|attesa|richiama(re)?|chiamare per prenotare)/i;
+const SATURDAY = /\b(sab|sabato)\b/i;
+const H24 = /\b([01]?\d|2[0-3]):[0-5]\d\b/g;
+const WHATSAPP_RE = /(wa\.me|api\.whatsapp|whatsapp)/i;
+const GROWTH_RE = /(nuova sede|apertura|stiamo assumendo|lavora con noi|nuovo centro|nuovi macchinari|campagna|promozione)/i;
+const DOUBLESYS_RE = /(miodottore|docplanner).*(doctolib)|(doctolib).*(miodottore|docplanner)/i;
+
+const META_TITLE_RE = /<title>[^<]{10,}<\/title>/i;
+const META_DESC_RE  = /<meta[^>]*name=["']description["'][^>]*content=["'][^"']{40,}["']/i;
+const ADS_RE        = /(gtag\(|googletagmanager|googleads|fbq\(|facebook\.com\/tr|pixel\.facebook)/i;
+const SOCIAL_LINKS_RE = /(facebook\.com|instagram\.com|linkedin\.com)/i;
+const REVIEWS_RE      = /(recensioni|opinioni|valutazioni|google reviews|trustpilot|miodottore)/i;
+
+function detectAreas(pages, staffInfo){
+  const concat = pages.map(p => (p.text||'')).join(' ').toLowerCase();
+  const htmlAll = pages.map(p => p.html||'').join('\n');
+
+  // provider via iframe/src/script
+  const providerIframes = (htmlAll.match(/<iframe[^>]+src=["'][^"']+["'][^>]*>/gi)||[]).map(x=>x.toLowerCase()).filter(x=>BOOKING_PROVIDERS_RE.test(x));
+  const providerScripts = (htmlAll.match(/<script[^>]+src=["'][^"']+["'][^>]*>/gi)||[]).map(x=>x.toLowerCase()).filter(x=>BOOKING_PROVIDERS_RE.test(x));
+
+  // JSON-LD ReserveAction
+  const jsonld = pages.flatMap(p => extractJsonLd(p.html||""));
+  const reserveAction = jsonld.some(n => {
+    try {
+      const pa = n.potentialAction || n.PotentialAction || n.action || null;
+      if (!pa) return false;
+      const arr = Array.isArray(pa) ? pa : [pa];
+      return arr.some(a => /ReserveAction|BookAction/i.test(a['@type']||''));
+    } catch { return false; }
+  });
+
+  // Forms / CTA "prenota"
+  const hasFormBooking = /<form[\s\S]*?(prenota|appuntamento|booking|cup)[\s\S]*?<\/form>/i.test(htmlAll);
+  const hasCTA = /class=["'][^"']*(btn|cta)[^"']*["'][^>]*>([^<]*(prenota|appuntamento|booking|cup)[^<]*)</i.test(htmlAll);
+
+  function detectBooking(){
+    const providerHit = BOOKING_PROVIDERS_RE.test(concat) || providerIframes.length>0 || providerScripts.length>0 || reserveAction;
+    const bookingWord = BOOKING_KEYWORDS_RE.test(concat);
+    if (providerHit) return { score:2, confidence:'high', evidence: 'Widget/provider/ReserveAction rilevati' };
+    if (hasFormBooking || hasCTA) return { score:3, confidence:'mid', evidence:'Form/CTA “prenota” rilevati' };
+    if (bookingWord) return { score:5, confidence:'mid', evidence: 'Segnali testuali di prenotazione' };
+    return { score:10, confidence:'mid', evidence: 'Nessuna evidenza di prenotazione online' };
+  }
+  function detectTelefonate(hasBooking){
+    const stress = PHONE_STRESS.test(concat);
+    if (stress) return { score:8, confidence:'mid', evidence:'Testo con attese/telefono' };
+    return { score: hasBooking?3:7, confidence: 'low', evidence: hasBooking?'Booking presente':'Indizio indiretto' };
+  }
+  function detectOrari(){
+    const hasSat = SATURDAY.test(concat);
+    const times = concat.match(H24)||[];
+    const late = times.some(t=>{const [h,m]=t.split(':').map(Number); return h>19 || (h===19 && m>=30);});
+    return { score:(hasSat||late)?7:3, confidence:(hasSat||late)?'mid':'low', evidence:(hasSat?'sabato ':'')+(late?'orari ≥19:30':'') };
+  }
+  function detectWhatsApp(){ const wa=WHATSAPP_RE.test(concat); return { score: wa?7:2, confidence: wa?'high':'low', evidence: wa?'Link/menzione WhatsApp':'Nessuna evidenza' }; }
+  function detectCrescita(){ const hit=GROWTH_RE.test(concat); return { score: hit?8:3, confidence: hit?'mid':'low', evidence: hit?'Parole chiave di crescita':'Nessuna evidenza' }; }
+  function detectDoppio(){ const dbl=DOUBLESYS_RE.test(concat); return { score: dbl?9:2, confidence: dbl?'high':'mid', evidence: dbl?'MD+DL rilevati':'Nessun doppio sistema' }; }
+  function detectDimensione(){
+    if (staffInfo && typeof staffInfo.mediciCount==='number' && staffInfo.mediciCount>=0){
+      const n = staffInfo.mediciCount;
+      let s, ev;
+      if (n<=2){ s = 3; ev = 'Micro-struttura ('+n+' medici)'; }
+      else if (n<=20){ s = 9; ev = 'Target ideale ('+n+' medici)'; }
+      else { s = 6; ev = 'Grande struttura ('+n+' medici)'; }
+      return { score:s, confidence: staffInfo.confidence||'mid', evidence: ev };
+    }
+    const hits = (concat.match(/(dott\.|dottore|dottoressa|dr\.|medico|specialista)/gi)||[]).length;
+    const s = (hits>=3 && hits<=20)?9 : (hits>20 && hits<=40)?6 : (hits>40)?5 : 3;
+    return { score:s, confidence:'low', evidence:'Occorrenze parole-medico: '+hits };
+  }
+  function detectServizi(){ const hit=/(radiologia|tac|risonanza|ecografia|fisioterapia|prelievi|analisi)/i.test(concat); return { score: hit?8:3, confidence: hit?'mid':'low', evidence: hit?'Servizi ad alta chiamata presenti':'Nessuna evidenza' }; }
+  function detectDM(){ const hit=/(direzione sanitaria|direttore sanitario|amministrazione|titolare|responsabile)/i.test(concat); return { score: hit?7:3, confidence: hit?'mid':'low', evidence: hit?'Ruolo/contatto di direzione':'Nessuna evidenza' }; }
+  function detectNum(){ const hasPh=PHONE_RE.test(concat); const tag=/(prenotazioni|segreteria|cup|centralino|accettazione)/i.test(concat); return { score: hasPh?(tag?7:5):2, confidence: hasPh?'mid':'low', evidence: hasPh?'Telefono presente':'Nessuna evidenza' }; }
+
+  function detectSeo(){ const titleOK=META_TITLE_RE.test(htmlAll); const descOK=META_DESC_RE.test(htmlAll); const sc = (!titleOK || !descOK)?7:3; return { score:sc, confidence:'mid', evidence:(!titleOK?'title mancante ':'')+(!descOK?'meta description debole':'') }; }
+  function detectAdv(){ const hit=ADS_RE.test(htmlAll); return { score: hit?3:8, confidence:'mid', evidence: hit?'Pixel/codici ads':'Nessuna traccia di campagne' }; }
+  function detectSocial(){ const hit=SOCIAL_LINKS_RE.test(concat); return { score: hit?5:8, confidence:'low', evidence: hit?'Link social presenti':'Nessun link social' }; }
+  function detectReviews(){ const hit=REVIEWS_RE.test(concat); return { score: hit?4:7, confidence:'low', evidence: hit?'Sezione/widget recensioni':'Nessuna evidenza recensioni' }; }
+
+  const booking = detectBooking();
+  const telefonate = detectTelefonate(booking.score<=5);
+  const orari = detectOrari();
+  const whatsapp = detectWhatsApp();
+  const crescita = detectCrescita();
+  const doppioSistema = detectDoppio();
+  const dimensione = detectDimensione();
+  const serviziCall = detectServizi();
+  const decisionMaker = detectDM();
+  const numeroDiretto = detectNum();
+  const seoBase = detectSeo();
+  const advAttiva = detectAdv();
+  const social = detectSocial();
+  const reputazione = detectReviews();
+
+  window.__debug = window.__debug || {};
+  const dbgLines=[];
+  if (providerIframes?.length) dbgLines.push('iframe provider: '+providerIframes.length);
+  if (providerScripts?.length) dbgLines.push('script provider: '+providerScripts.length);
+  if (reserveAction) dbgLines.push('JSON-LD: ReserveAction/BookAction');
+  if (hasFormBooking) dbgLines.push('Form di prenotazione rilevato');
+  if (hasCTA) dbgLines.push('CTA “prenota” rilevata');
+  if (BOOKING_KEYWORDS_RE.test(concat)) dbgLines.push('keywords: prenota/booking');
+  window.__debug.booking = dbgLines;
+
+  return { areas: { booking, telefonate, orari, whatsapp, crescita, doppioSistema, dimensione, serviziCall, decisionMaker, numeroDiretto, seoBase, advAttiva, social, reputazione } };
+}
+
+// ---------- Scoring + rendering ----------
+const AREAS = ['booking','telefonate','orari','whatsapp','crescita','doppioSistema','dimensione','serviziCall','decisionMaker','numeroDiretto','seoBase','advAttiva','social','reputazione'];
+const WEIGHTS = { booking:2, telefonate:2, crescita:2, doppioSistema:2, dimensione:2, orari:1, whatsapp:1, serviziCall:1, decisionMaker:1, numeroDiretto:1, seoBase:1, advAttiva:1, social:1, reputazione:1 };
+
+function scoreAll(areas){
+  let sum=0, denom=0, covered=0;
+  for(const [k,a] of Object.entries(areas)){
+    const w = WEIGHTS[k]||1;
+    const s = clamp(a.score,0,10);
+    sum += s*w; denom += 10*w;
+    if (a.evidence || a.confidence!=='low') covered++;
+  }
+  const final = Math.round((sum/denom)*100)/10;
+  const coverage = Math.round(100*covered/Object.keys(areas).length);
+  const temperature = final>=8?'hot':final>=5?'warm':'cold';
+  return { final, coverage, temperature };
+}
+function areaLabel(k){
+  return ({
+    booking:'Prenotazione online migliorabile/assente',
+    telefonate:'Traffico telefonico/attese',
+    orari:'Orari estesi/sabato (alto afflusso)',
+    whatsapp:'WhatsApp presente (rischio non presidiato)',
+    crescita:'Segnali di crescita (sede/assunzioni/adv)',
+    doppioSistema:'Doppio sistema MD+DL',
+    dimensione:'Taglia struttura (medici)',
+    serviziCall:'Servizi ad alta chiamata presenti',
+    decisionMaker:'Decision maker identificabile',
+    numeroDiretto:'Numero diretto/centralino rilevato',
+    seoBase:'SEO base migliorabile',
+    advAttiva:'Campagne/Pixel ads',
+    social:'Social media',
+    reputazione:'Reputazione/Recensioni'
+  })[k] || k;
+}
+function confBadge(c){ const map={low:'conf-low',mid:'conf-mid',high:'conf-high',guess:'conf-guess'}; return '<span class="badge '+(map[c]||'conf-low')+'">'+(c||'low')+'</span>'; }
+function renderAreas(areas){
+  $('#areasBody').innerHTML = AREAS.map(a=>{
+    const it = areas[a]; const s = (it?.score??0).toFixed(1); const c = confBadge(it?.confidence||'low'); const e = esc(it?.evidence||'—');
+    return '<tr><td>'+areaLabel(a)+'</td><td>'+s+'</td><td>'+c+'</td><td>'+e+'</td></tr>';
+  }).join('');
+}
+function topWeaknesses(areas, n=5){
+  const arr = Object.entries(areas).map(([k,a])=>({key:k,label:areaLabel(k),score:a.score||0,evidence:a.evidence||''}))
+    .sort((A,B)=>B.score-A.score||A.label.localeCompare(B.label));
+  return arr.slice(0,n);
+}
+function renderTop5(t5){
+  const colors = ['#ff6b6b','#ff9f43','#f1c40f','#4aa3ff','#2ecc71'];
+  $('#top5').innerHTML = t5.map((x,i)=>'<div class="chip" title="'+esc(x.evidence)+'" onclick="alert(\''+esc(x.label)+'\\n\\n'+esc(x.evidence||'')+'\')" style="border-color:'+colors[i]+';box-shadow:0 0 0 1px '+colors[i]+' inset"><strong>'+(i+1)+'. '+esc(x.label)+'</strong> ('+x.score.toFixed(1)+')</div>').join('');
+}
+function setGauge(v){
+  $('#scoreText').textContent = v.toFixed(1);
+  const t = v>=8?'hot':v>=5?'warm':'cold';
+  $('#dot').className = 'dot '+t; $('#tempText').textContent = (t==='hot'?'caldo':t==='warm'?'tiepido':'freddo');
+  const L=377, shown=L*(Math.min(10,Math.max(0,v))/10);
+  $('#arc').setAttribute('stroke-dasharray', shown+' '+(L-shown));
+  const deg = -90 + (Math.min(10,Math.max(0,v))/10)*180;
+  $('#needle').style.transform = 'rotate('+deg+'deg)';
+}
+
+// ---------- Advisor ----------
+function composeAdvisorNote(areas, staff, contacts, cover){
+  const scoreBooking = areas.booking?.score ?? 10;
+  const bookingMsg = scoreBooking<=3 ? "Hai già un sistema di prenotazione online: va reso più visibile nelle pagine ad alto traffico." :
+                      scoreBooking<=5 ? "Ci sono segnali di prenotazione online ma poco evidenti; conviene portare il widget nelle pagine visita." :
+                      "Manca una prenotazione online chiara; questo genera chiamate e tempi d’attesa.";
+
+  const medici = staff?.mediciCount ?? 0;
+  const taglia = medici<=2? "micro-struttura" : (medici<=20? "struttura medio-piccola" : "struttura grande");
+  const confStaff = staff?.confidence || 'low';
+
+  const positives = [];
+  if ((areas.whatsapp?.score||10) >=2 && (areas.whatsapp?.score||10) <=5) positives.push("WhatsApp presente (da canalizzare)");
+  if ((areas.serviziCall?.score||0) >=8) positives.push("Servizi ad alta chiamata già comunicati");
+  if ((areas.advAttiva?.score||10) <=3) positives.push("Tracciamenti ADV presenti (base pronta per campagne)");
+
+  const t5 = topWeaknesses(areas,5).map(x=>x.label);
+  const next = [];
+  if (scoreBooking>3) next.push("Mettere il widget/CTA “Prenota ora” in home e nelle pagine visita/specialità");
+  if ((areas.doppioSistema?.score||0)>=8) next.push("Evitare doppi provider (es. MD + DL): unificare i flussi");
+  if ((areas.telefonate?.score||0)>=7) next.push("Ridurre il carico telefonico con prenotazione self-service e reminder automatici");
+  if ((areas.seoBase?.score||0)>=7) next.push("Rafforzare title e meta description per le visite principali");
+  if ((areas.reputazione?.score||0)>=7) next.push("Rendere visibili recensioni/valutazioni verificate");
+
+  const who = contacts?.name || "la struttura";
+  const city = contacts?.city ? (" a "+contacts.city) : "";
+
+  const intro = `Dalla lettura del sito, ${who}${city} appare una ${taglia} (≈${medici} medici, conf. ${confStaff}). Copertura segnali ${cover}%. ${bookingMsg}`;
+  const good  = positives.length ? `\n\nCosa funziona: ${positives.slice(0,3).join(' · ')}.` : "";
+  const prio  = `\n\nPriorità operative: ${t5.slice(0,3).join(' · ')}.`;
+  const actions = next.length ? `\n\nProssimi passi: ${next.slice(0,3).join(' · ')}.` : "";
+
+  return (intro + good + prio + actions).trim();
+}
+
+// ---------- UI helpers ----------
+function renderStaffBadge(info){
+  const el = $('#staffBadge');
+  const count = info?.mediciCount ?? 0;
+  const conf = info?.confidence || 'low';
+  el.textContent = count + ' ('+conf+')';
+  el.className = 'badge ' + (conf==='high'?'conf-high':conf==='mid'?'conf-mid':'conf-low');
+}
+function openStaffDialog(info){
+  const tb = $('#tblStaff tbody');
+  tb.innerHTML = (info?.items||[]).slice(0,200).map(p=>'<tr><td>'+esc(p.name||'')+'</td><td>'+esc(p.role||'')+'</td><td>'+esc(p.source||'')+'</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.page||'')+'</td></tr>').join('') || '<tr><td colspan="4" class="muted">Nessun elemento</td></tr>';
+  $('#staffConf').textContent = 'Confidenza: ' + (info?.confidence||'low') + ' • Pagine: ' + (info?.pagesUsed||[]).length;
+  $('#dlgStaff').showModal();
+}
+function setConfs(c){
+  const map = {low:'conf-low',mid:'conf-mid',high:'conf-high',guess:'conf-guess'};
+  $("#confName").className = "badge "+(map[c?.name||'low']||'conf-low'); $("#confName").textContent = "name: "+(c?.name||'low');
+  $("#confCity").className = "badge "+(map[c?.city||'low']||'conf-low'); $("#confCity").textContent = "city: "+(c?.city||'low');
+  $("#confPhone").className = "badge "+(map[c?.phone||'low']||'conf-low'); $("#confPhone").textContent = "phone: "+(c?.phone||'low');
+  $("#confEmail").className = "badge "+(map[c?.email||'low']||'conf-low'); $("#confEmail").textContent = "email: "+(c?.email||'low');
+  $("#confAddress").className = "badge "+(map[c?.address||'low']||'conf-low'); $("#confAddress").textContent = "address: "+(c?.address||'low');
+}
+function renderContact(loc){
+  $("#name").value = loc.name||""; $("#city").value=loc.city||""; $("#phone").value=loc.phone||"—"; $("#email").value=loc.email||"—"; $("#address").value=loc.address||"";
+  $("#sourceHint").value = loc._sourceHint||loc._source||'';
+  setConfs(loc.confidence||{});
+}
+function resetAnalysisUI(){
+  $("#url").value = "";
+  $("#name").value = ""; $("#city").value=""; $("#phone").value="—"; $("#email").value="—"; $("#address").value="";
+  $("#sourceHint").value = "";
+  $("#script").value = ""; $("#mailSubj").value=""; $("#mailBody").value=""; $("#pasted").value="";
+  $("#areasBody").innerHTML = ""; $("#coverage").textContent="Copertura segnali: 0%"; $("#top5").innerHTML="";
+  $("#advisor").value = "";
+  $("#sedeLabel").textContent = "—"; $("#locSelect").innerHTML = ""; renderStaffBadge({ mediciCount:0, confidence:'low' });
+  setGauge(0); setProgress(0); setStatus("Pronto.");
+  window.__locations=[]; window.__locIndex=-1; window.__lastLead=null; window.__debug={}; window.__staff=null;
+  $("#url").focus();
+}
+function refreshComms(){
+  const reasons = (window.__lastLead?.analysis?.topReasons)||[];
+  const nm = $("#name").value || (window.__locations?.[window.__locIndex||0]?.name)||"—";
+  $("#script").value = buildScript(nm, reasons);
+  const pitch = buildPitchMail({ name: $("#name").value, city: $("#city").value }, reasons);
+  $("#mailSubj").value = pitch.subject; $("#mailBody").value = pitch.body;
+}
+function updateLocLabel(){
+  const n = (window.__locations||[]).length, i = (window.__locIndex??-1);
+  $("#sedeLabel").textContent = n? ("Sede "+(i+1)+"/"+n) : "—";
+}
+function bindLocSelector(){
+  const sel = $("#locSelect"); sel.innerHTML = (window.__locations||[]).map((l,i)=>'<option value="'+i+'">'+esc((l.city? (l.city+" · "):"") + (l.address||l.name||("Sede "+(i+1))))+'</option>').join('');
+  sel.onchange = ()=>{ window.__locIndex = parseInt(sel.value||"0"); renderContact(window.__locations[window.__locIndex]||{}); refreshComms(); updateLocLabel(); };
+}
+
+// ---------- Script & pitch ----------
+function proposeSlots(){
+  const day = ["dom","lun","mar","mer","gio","ven","sab"];
+  const d1=new Date(); d1.setDate(d1.getDate()+1); d1.setHours(11,30,0,0);
+  const d2=new Date(); d2.setDate(d2.getDate()+2); d2.setHours(16,0,0,0);
+  const f = d=>day[d.getDay()]+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  return [f(d1), f(d2)];
+}
+function buildScript(name, reasons){
+  const [a,b] = proposeSlots();
+  const why = reasons?.length ? " In 15' ti mostro: " + reasons.join(' · ') + "." : "";
+  return "Ciao " + (name||'—') + ", seguo strutture come la tua per ridurre chiamate perse e aumentare appuntamenti integrando prenotazione online e gestione chiamate." + why + " Ti propongo " + a + " o " + b + " su Meet. Quale preferisci?";
+}
+function buildPitchMail(contact, reasons){
+  const ogg = "Ridurre le chiamate perse e semplificare le prenotazioni " + (contact.city?("a "+contact.city+" – "):"") + (contact.name||"alla vostra struttura");
+  const r = (reasons||[]).slice(0,3);
+  const body = "Buongiorno,\n\n" +
+"analizzando la vostra presenza online ho notato alcuni aspetti che impattano sull’organizzazione " + (contact.name?("di "+contact.name):"della struttura") + (contact.city?(" a "+contact.city):"") + ":\n" +
+"- " + (r[0]||"—") + "\n" +
+"- " + (r[1]||"—") + "\n" +
+"- " + (r[2]||"—") + "\n\n" +
+"Questi elementi sono comuni a molte strutture sanitarie che seguiamo: spesso significano pazienti persi, tempi di attesa lunghi e segreteria sovraccarica.\n\n" +
+"In pochi minuti posso mostrarvi come strutture simili hanno risolto queste criticità, riducendo le chiamate perse e aumentando la soddisfazione dei pazienti.\n\n" +
+"Le propongo due slot per un confronto veloce su Meet:\n" +
+"- " + proposeSlots()[0] + "\n" +
+"- " + proposeSlots()[1] + "\n\n" +
+"Quale preferisce?\n\n" +
+"Cordiali saluti,\nAlfonso Pesce";
+  return { subject: ogg, body };
+}
+
+// ---------- Provenance & debug ----------
+function renderProvenance(pages){
+  $('#prov').innerHTML = pages.map(p => '<div class="box" style="background:#0f1532;border:1px solid #2a3260;border-radius:12px;padding:10px"><div class="muted">'+esc(p.role||'page')+'</div><div style="font-size:13px">'+esc(p.url||'')+'</div><div class="muted" style="font-size:12px">'+(p.text?.length||0)+' chars</div></div>').join('');
+}
+function renderDebug(){
+  const dbg = window.__debug||{};
+  const contacts = (dbg.blocks||[]).filter(x=>x.type==='phone'||x.type==='email'||x.type==='address'||x.type==='city'||x.type==='name');
+  $('#dbgContactsCount').textContent = contacts.length;
+  $('#dbgContacts').innerHTML = contacts.map(x => '<div class="snip"><strong>['+esc(x.type)+']</strong> '+esc(x.note)+' <span class="muted">('+esc(x.page||'')+')</span>\n'+esc((x.snippet||'').slice(0,220))+'</div>').join('') || '<div class="muted">—</div>';
+
+  const blocks = (dbg.blocks||[]).filter(x=>x.note && /footer|contact-block|regex address|maps|microdata|<address>|dom:name|cloudflare-protection|data-|js-var/i.test(x.note||''));
+  $('#dbgBlocksCount').textContent = blocks.length;
+  $('#dbgBlocks').innerHTML = blocks.map(x => '<div class="snip"><strong>'+esc(x.note)+'</strong> <span class="muted">('+esc(x.page||'')+')</span>\n'+esc((x.snippet||'').slice(0,280))+'</div>').join('') || '<div class="muted">—</div>';
+
+  const bk = dbg.booking||[];
+  $('#dbgBookingCount').textContent = bk.length || 0;
+  $('#dbgBooking').innerHTML = bk.length ? bk.map(s=>'<div class="snip">'+esc(s)+'</div>').join('') : '<div class="muted">—</div>';
+
+  const st = window.__staff || { items:[] };
+  $('#dbgStaffCount').textContent = st.items.length;
+  $('#dbgStaff').innerHTML = st.items.slice(0,10).map(p => '<div class="snip"><strong>'+esc(p.name)+'</strong> · '+esc(p.role||'')+' <span class="muted">['+esc(p.source)+']</span>\n'+esc(p.page||'')+'</div>').join('') || '<div class="muted">—</div>';
+}
+
+// ---------- Ensure contacts filled (guesses) ----------
+function ensureContactsFilled(baseUrl){
+  const allowGuesses = S.load().allowGuesses!==false;
+  const siteDomain = getSiteDomain(baseUrl);
+
+  let email = $('#email').value.trim();
+  let phone = $('#phone').value.trim();
+
+  const conf = { ...((window.__locations?.[window.__locIndex||0]||{}).confidence||{}) };
+
+  if ((!email || email==='—') && allowGuesses){
+    const guesses = guessEmailFromDomain(baseUrl)||[];
+    if (guesses.length){ email = guesses[0]; conf.email='guess'; $('#sourceHint').value = ($('#sourceHint').value||'') + '/guess-email'; }
+  }
+  if (!email || email==='—'){ email = '—'; conf.email = conf.email||'low'; }
+
+  if ((!phone || phone==='—') && allowGuesses){
+    const dbg = window.__debug||{};
+    const wa = (dbg.blocks||[]).map(b=>b.snippet).find(s=>/wa\.me|api\.whatsapp/.test(s||''));
+    if (wa){
+      const m = String(wa).match(/\d{7,}/); if (m) { phone = normalizePhone(m[0]); conf.phone='guess'; $('#sourceHint').value = ($('#sourceHint').value||'') + '/guess-wa'; }
+    }
+  }
+  if (!phone || phone==='—'){ phone = '—'; conf.phone = conf.phone||'low'; }
+
+  $('#email').value = email;
+  $('#phone').value = phone;
+  setConfs(conf);
+}
+
+// ---------- Analyze flow ----------
+async function analyze(){
+  const url = $('#url').value.trim();
+  const pasted = $('#pasted').value.trim();
+  if (!url && !pasted){ alert('Inserisci un URL o incolla testo'); return; }
+  setStatus('Lettura pagina…'); setProgress(10);
+
+  let pages = [];
+  try{
+    if (pasted){
+      pages.push({ url:"pasted://", role:"main", html:"", text:pasted });
+    } else {
+      // Main fetch
+      let main = await edgeFetch(url, { strip:false, text:true, timeout:12000 });
+      if ((main.status>=400 || !main.html || main.html.length<200) && !S.load().forceUADesktop){
+        const prev = S.load(); prev.forceUADesktop = true; S.save(prev);
+        main = await edgeFetch(url, { strip:false, text:true, timeout:12000 });
+      }
+      const base = new URL(url).origin;
+      const mainText = main.text || extractText(main.html);
+      pages.push({ url, role:"main", html: main.html, text: mainText });
+
+      setStatus('Scoperta link interni…'); setProgress(28);
+      const subs = await crawlPriorityBFS(url, main.html);
+      setStatus('Lettura sottopagine…'); setProgress(52);
+      pages.push(...subs);
+    }
+
+    setStatus('Parsing JSON-LD & contatti…'); setProgress(68);
+    const jsonLd = pages.flatMap(p => extractJsonLd(p.html||""));
+    const locations = buildLocations(jsonLd, pages, pages[0]?.html||"");
+    window.__locations = locations; window.__locIndex = locations.length?0:-1;
+    bindLocSelector(); updateLocLabel(); renderContact(locations[0]||{});
+
+    setStatus('Staff Finder…'); setProgress(77);
+    const staff = buildStaff(pages);
+    window.__staff = staff; renderStaffBadge(staff);
+
+    setStatus('Valutazione aree…'); setProgress(86);
+    const det = detectAreas(pages, staff);
+    renderAreas(det.areas);
+
+    const sc = scoreAll(det.areas);
+    setGauge(sc.final);
+    $('#coverage').textContent = 'Copertura segnali: '+sc.coverage+'%';
+    const t5 = topWeaknesses(det.areas, 5); renderTop5(t5);
+    renderProvenance(pages);
+    renderDebug();
+
+    const reasons = t5.slice(0,3).map(x=>x.label);
+    const nm = $("#name").value || locations[0]?.name || (new DOMParser().parseFromString(pages[0]?.html||'','text/html').querySelector('title')?.textContent||"");
+    $("#script").value = buildScript(nm, reasons);
+    const pitch = buildPitchMail({ name: nm || $("#name").value, city: $("#city").value }, reasons);
+    $("#mailSubj").value = pitch.subject; $("#mailBody").value = pitch.body;
+
+    // Advisor note
+    const advisorNote = composeAdvisorNote(det.areas, staff, locations[0]||{}, sc.coverage);
+    $("#advisor").value = advisorNote;
+
+    window.__lastLead = {
+      analysis:{ areas:det.areas, coverage: sc.coverage, finalScore: sc.final, temperature: sc.temperature, topReasons: reasons },
+      staff: staff,
+      summary:{ score: sc.final, temperature: sc.temperature, topReasons: reasons, script: $("#script").value, pitchMail: pitch, advisor: advisorNote },
+      provenance:{ pagesRead: pages.map(p=>({url:p.url, role:p.role, chars:(p.text||'').length})) }
+    };
+
+    ensureContactsFilled(url);
+
+    setStatus('Fatto.'); setProgress(100);
+  }catch(e){
+    console.error(e); setStatus('Errore: '+e.message); setProgress(0);
+  }
+}
+
+// ---------- Staff orchestration ----------
+function buildStaff(pages){
+  const items = [];
+  const pagesUsed = [];
+  for (const p of pages){
+    const jl = extractJsonLd(p.html||"");
+    const jItems = extractStaffFromJSONLD(jl, p.url);
+    const dItems = extractStaffFromDOM(p.html||"", p.url);
+    const all = [...jItems, ...dItems];
+    if (all.length){ pagesUsed.push(p.url); items.push(...all); }
+  }
+  const unique = dedupePeople(items);
+  const medici = unique.filter(x=>x.kind==='medico' || classifyRole(x.role||x.name)==='medico');
+  const conf = staffConfidence(unique);
+  return { items: unique, mediciCount: medici.length, confidence: conf, pagesUsed };
+}
+
+// ---------- Queue & export ----------
+function temperature(v){ return v>=8?'hot':v>=5?'warm':'cold'; }
+function renderQueue(){
+  const term = $('#search')?.value?.toLowerCase()||'';
+  const leads = (S.load().leads||[]).slice()
+    .sort((a,b)=>b.score-a.score||a.createdAt-b.createdAt)
+    .filter(l => !term || l.name.toLowerCase().includes(term) || (l.city||'').toLowerCase().includes(term));
+  $('#queueBody').innerHTML = leads.map(l =>
+    '<tr><td><span class="dot '+(l.temp||'cold')+'"></span></td><td>'+esc(l.name)+'</td><td>'+esc(l.city||'')+'</td><td>'+l.score.toFixed(1)+'</td><td>'+
+    '<button class="btn-ghost" onclick="openWA(\''+esc(l.phone||'')+'\')">WA</button> '+
+    '<button class="btn-ghost" onclick="alert(\'Chiama: '+esc(l.phone||'')+'\')">Chiama</button> '+
+    '<button class="btn-ghost" onclick="mailtoLead(\''+esc(l.email||'')+'\', \''+esc(l.name||'')+'\')">Email</button>'+
+    '</td></tr>'
+  ).join('') || '<tr><td colspan="5" class="muted">Nessun lead salvato.</td></tr>';
+}
+function addLead(){
+  const la = window.__lastLead || { summary:{score:0, topReasons:[], script:"", advisor:""}, analysis:{}, provenance:{} };
+  const loc = window.__locations?.[window.__locIndex||0] || {};
+  const s = S.load(); s.leads = s.leads || [];
+  s.leads.push({
+    id: uuid(),
+    name: $('#name').value.trim() || (loc.name||'—'),
+    city: $('#city').value.trim() || (loc.city||''),
+    address: $('#address').value.trim() || (loc.address||''),
+    phone: $('#phone').value.trim() || (loc.phone||'—'),
+    email: $('#email').value.trim() || (loc.email||'—'),
+    url: $('#url').value.trim(),
+    score: la.summary.score||0, temp: temperature(la.summary.score||0),
+    reasons: la.summary.topReasons||[], script: $('#script').value.trim(),
+    pitch: { subject: $('#mailSubj').value, body: $('#mailBody').value },
+    advisor: $('#advisor').value,
+    staff: { count: (window.__staff?.mediciCount||0), confidence:(window.__staff?.confidence||'low') },
+    createdAt: Date.now()
+  });
+  S.save(s); renderQueue();
+  if (S.load().resetAfterSave!==false){ resetAnalysisUI(); }
+  toast('Aggiunto in coda. Analisi resettata.');
+}
+function exportJSON(){
+  const s=S.load(); const blob=new Blob([JSON.stringify({leads:s.leads||[]},null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='qpwon_export.json'; a.click(); URL.revokeObjectURL(u);
+}
+function exportCSV(){
+  const s=S.load(); const cols=['nome','città','indirizzo','telefono','email','url','score','temperatura','motivi','advisor','staff_medici','conf_staff'];
+  const rows=(s.leads||[]).map(l=>[wrap(l.name),wrap(l.city||''),wrap(l.address||''),wrap(l.phone||''),wrap(l.email||''),wrap(l.url||''),l.score.toFixed(1),l.temp,wrap((l.reasons||[]).join(' | ')),wrap(l.advisor||''),l.staff?.count||0,l.staff?.confidence||''].join(','));
+  const csv=[cols.join(','),...rows].join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='qpwon_export.csv'; a.click(); URL.revokeObjectURL(u);
+  function wrap(s){ s=(s||'').toString().replaceAll('"','""'); return '"'+s+'"'; }
+}
+function openWA(phone){
+  const p = (phone||$('#phone').value||'').replace(/\D+/g,'');
+  if(!p || p==='—'){ alert('Numero WhatsApp non disponibile'); return; }
+  const text = encodeURIComponent($('#script').value||'');
+  window.open('https://wa.me/'+p+'?text='+text,'_blank');
+}
+function mailtoLead(email, name){
+  const e = email || $('#email').value || '';
+  if(!e || e==='—'){ alert('Email non disponibile'); return; }
+  const subj = encodeURIComponent($('#mailSubj').value||('Per '+(name||$('#name').value||'')));
+  const body = encodeURIComponent($('#mailBody').value||'');
+  window.location.href = 'mailto:'+e+'?subject='+subj+'&body='+body;
+}
+function copyContacts(){
+  const txt = [
+    $('#name').value, $('#address').value, $('#city').value,
+    'Tel: '+($('#phone').value||'—'),
+    'Email: '+($('#email').value||'—')
+  ].filter(Boolean).join('\n');
+  navigator.clipboard.writeText(txt).then(()=>toast('Contatti copiati'));
+}
+
+// Small helpers re-used above
+function getSiteDomain(fromUrl){ try{ return new URL(fromUrl||'').hostname.replace(/^www\./,''); }catch{ return ''; } }
+
+// ---------- Bindings ----------
+$('#analyze').addEventListener('click', analyze);
+$('#saveLead').addEventListener('click', addLead);
+$('#exportJSON').addEventListener('click', exportJSON);
+$('#exportCSV').addEventListener('click', exportCSV);
+$('#resetAll').addEventListener('click', ()=>{ if(confirm('Reset impostazioni + coda?')){ localStorage.removeItem(STORAGE); state=S.load(); renderQueue(); resetAnalysisUI(); toast('Reset eseguito.'); } });
+$('#btnSettings').addEventListener('click', ()=>{
+  $('#proxyEndpoint').value = (S.load().proxyEndpoint||DEFAULTS.proxyEndpoint);
+  $('#resetAfterSave').checked = S.load().resetAfterSave!==false;
+  $('#allowGuesses').checked = S.load().allowGuesses!==false;
+  $('#forceUADesktop').checked = S.load().forceUADesktop!==false;
+  $('#accuracyMode').value = S.load().accuracyMode || 'balanced';
+  $('#dlg').showModal();
+});
+$('#saveSettings').addEventListener('click', (e)=>{
+  e.preventDefault();
+  const s = S.load();
+  s.proxyEndpoint = $('#proxyEndpoint').value.trim()||DEFAULTS.proxyEndpoint;
+  s.resetAfterSave = $('#resetAfterSave').checked;
+  s.allowGuesses = $('#allowGuesses').checked;
+  s.forceUADesktop = $('#forceUADesktop').checked;
+  s.accuracyMode = $('#accuracyMode').value;
+  S.save(s);
+  $('#dlg').close();
+  toast('Impostazioni salvate.');
+});
+$('#tabScript').addEventListener('click', ()=>{ $('#tabScript').className='btn-accent'; $('#tabPitch').className='btn-ghost'; $('#scriptWrap').style.display='flex'; $('#pitchWrap').style.display='none'; });
+$('#tabPitch').addEventListener('click', ()=>{ $('#tabPitch').className='btn-accent'; $('#tabScript').className='btn-ghost'; $('#scriptWrap').style.display='none'; $('#pitchWrap').style.display='flex'; });
+$('#btnCopyContacts').addEventListener('click', copyContacts);
+$('#btnOpenWA').addEventListener('click', ()=>openWA($('#phone').value));
+$('#btnMailto').addEventListener('click', ()=>mailtoLead($('#email').value,$('#name').value));
+$('#search').addEventListener('input', renderQueue);
+$('#prevLoc').addEventListener('click', ()=>{ if((window.__locations||[]).length){ window.__locIndex = (window.__locIndex-1+window.__locations.length)%window.__locations.length; $('#locSelect').value=String(window.__locIndex); renderContact(window.__locations[window.__locIndex]); refreshComms(); updateLocLabel(); ensureContactsFilled($('#url').value); } });
+$('#nextLoc').addEventListener('click', ()=>{ if((window.__locations||[]).length){ window.__locIndex = (window.__locIndex+1)%window.__locations.length; $('#locSelect').value=String(window.__locIndex); renderContact(window.__locations[window.__locIndex]); refreshComms(); updateLocLabel(); ensureContactsFilled($('#url').value); } });
+$('#btnStaff').addEventListener('click', ()=> openStaffDialog(window.__staff || {}));
+$('#copyAdvisor').addEventListener('click', ()=>{ navigator.clipboard.writeText($('#advisor').value||'').then(()=>toast('Commento copiato')); });
+$('#useAdvisorInPitch').addEventListener('click', ()=>{
+  const t = $('#advisor').value||'';
+  if (t) { const cur = $('#mailBody').value||''; $('#mailBody').value = (cur ? (cur + "\n\n") : "") + t; toast('Inserito nel pitch.');}
+});
+
+// ---------- Init ----------
+renderQueue(); setGauge(0); setStatus('Pronto.'); renderStaffBadge({mediciCount:0,confidence:'low'});
+</script>
+</body>
+</html>
